@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/components/ui/toaster';
 import { LeadForm } from '@/components/property/lead-form';
+import { buildMapsSearchUrl } from '@/lib/geocode';
 
 const PropertyMap = dynamic(() => import('@/components/property/property-map').then((m) => ({ default: m.PropertyMap })), {
   ssr: false,
@@ -188,12 +189,53 @@ export default function PropertyDetailPage() {
               .filter(Boolean)
               .join(', ') || 'Endereço não informado'}
           </p>
-          {property.latitude != null && property.longitude != null && process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY && (
-            <PropertyMap
-              latitude={Number(property.latitude)}
-              longitude={Number(property.longitude)}
-              title={property.title}
-            />
+          {property.latitude != null && property.longitude != null ? (
+            <div>
+              <PropertyMap
+                latitude={Number(property.latitude)}
+                longitude={Number(property.longitude)}
+                title={property.title}
+              />
+              {[property.street, property.number, property.neighborhood, property.city].filter(Boolean).length > 0 && (
+                <a
+                  href={buildMapsSearchUrl({
+                    street: property.street ?? undefined,
+                    number: property.number ?? undefined,
+                    neighborhood: property.neighborhood ?? undefined,
+                    city: property.city ?? undefined,
+                    zipCode: property.zipCode ?? undefined,
+                  })}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-2 inline-block text-sm text-primary-600 hover:underline"
+                >
+                  Abrir no Google Maps para rotas
+                </a>
+              )}
+            </div>
+          ) : (
+            <div className="rounded-lg border bg-gray-50 p-6 text-center">
+              <p className="mb-3 text-sm text-gray-500">Mapa não disponível para este imóvel.</p>
+              <p className="mb-3 text-xs text-gray-400">
+                Ao editar o imóvel, use &quot;Preencher pelo endereço&quot; para adicionar a localização no mapa.
+              </p>
+              {[property.street, property.number, property.neighborhood, property.city].filter(Boolean).length > 0 && (
+                <a
+                  href={buildMapsSearchUrl({
+                    street: property.street ?? undefined,
+                    number: property.number ?? undefined,
+                    neighborhood: property.neighborhood ?? undefined,
+                    city: property.city ?? undefined,
+                    zipCode: property.zipCode ?? undefined,
+                  })}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
+                >
+                  Ver no Google Maps
+                </a>
+              )}
+            </div>
           )}
         </div>
 

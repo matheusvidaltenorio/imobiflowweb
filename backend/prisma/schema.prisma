@@ -29,10 +29,10 @@ enum PropertyStatus {
 }
 
 enum LeadStatus {
-  NOVO
-  EM_CONTATO
-  VISITA
-  CONVERTIDO
+  PROSPECCAO
+  QUALIFICACAO
+  NEGOCIACAO
+  VENDIDO
   PERDIDO
 }
 
@@ -231,7 +231,7 @@ model Lead {
   phone       String?
   message     String?
   source      String?
-  status      LeadStatus @default(NOVO)
+  status      LeadStatus @default(PROSPECCAO)
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @default(now()) @updatedAt
 

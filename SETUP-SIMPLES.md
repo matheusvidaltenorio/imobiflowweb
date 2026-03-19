@@ -34,6 +34,8 @@ npx prisma db seed
 npm run dev
 ```
 
+Se `migrate dev` falhar com P3005 (banco já criado sem migrations): execute o SQL em `prisma/migrations/20250318000000_lead_funnel_status/migration.sql` via psql ou cliente SQL, depois: `npx prisma migrate resolve --applied 20250318000000_lead_funnel_status`
+
 O backend ficará em **http://localhost:3333**
 
 ## 4. Rodar o frontend

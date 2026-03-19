@@ -1,11 +1,14 @@
 'use client';
 
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation } from '@tanstack/react-query';
+import { MapPin, Loader2 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { geocodeAddress } from '@/lib/geocode';
 import { Sidebar } from '@/components/dashboard/sidebar';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -38,14 +41,52 @@ export default function NewPropertyPage() {
   const router = useRouter();
   const { toast } = useToast();
 
+  const [geocoding, setGeocoding] = useState(false);
   const {
     register,
     handleSubmit,
+    setValue,
+    watch,
     formState: { errors },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: { status: 'DISPONIVEL', type: 'CASA' },
   });
+
+  async function handleFetchLocation() {
+    const city = watch('city');
+    const neighborhood = watch('neighborhood');
+    if (!city?.trim() || !neighborhood?.trim()) {
+      toast({ title: 'Preencha Cidade e Bairro para buscar localização', type: 'error' });
+      return;
+    }
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+    if (!apiKey) {
+      toast({ title: 'Configure NEXT_PUBLIC_GOOGLE_MAPS_API_KEY para geocodificar', type: 'error' });
+      return;
+    }
+    setGeocoding(true);
+    try {
+      const result = await geocodeAddress({
+        street: watch('street'),
+        number: watch('number'),
+        neighborhood: watch('neighborhood'),
+        city: watch('city'),
+        zipCode: watch('zipCode'),
+      });
+      if (result) {
+        setValue('latitude', result.lat);
+        setValue('longitude', result.lng);
+        toast({ title: 'Localização encontrada!', type: 'success' });
+      } else {
+        toast({ title: 'Endereço não encontrado. Tente ser mais específico.', type: 'error' });
+      }
+    } catch {
+      toast({ title: 'Erro ao buscar localização', type: 'error' });
+    } finally {
+      setGeocoding(false);
+    }
+  }
 
   const create = useMutation({
     mutationFn: (data: FormData) => api.post('/properties', data),
@@ -150,14 +191,38 @@ export default function NewPropertyPage() {
                 <Input {...register('zipCode')} />
               </div>
             </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <Label>Latitude (opcional, para mapa)</Label>
-                <Input type="number" step="any" {...register('latitude', { valueAsNumber: true })} placeholder="-23.5505" />
+            <div>
+              <div className="mb-2 flex items-center justify-between">
+                <Label>Localização no mapa</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleFetchLocation}
+                  disabled={geocoding || !watch('city')?.trim() || !watch('neighborhood')?.trim()}
+                >
+                  {geocoding ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <>
+                      <MapPin className="mr-1.5 h-4 w-4" />
+                      Preencher pelo endereço
+                    </>
+                  )}
+                </Button>
               </div>
-              <div>
-                <Label>Longitude (opcional, para mapa)</Label>
-                <Input type="number" step="any" {...register('longitude', { valueAsNumber: true })} placeholder="-46.6333" />
+              <p className="mb-2 text-xs text-gray-500">
+                Preencha o endereço acima e clique em &quot;Preencher pelo endereço&quot; para obter as coordenadas automaticamente.
+              </p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <Label className="text-xs">Latitude</Label>
+                  <Input type="number" step="any" {...register('latitude', { valueAsNumber: true })} placeholder="-23.5505" />
+                </div>
+                <div>
+                  <Label className="text-xs">Longitude</Label>
+                  <Input type="number" step="any" {...register('longitude', { valueAsNumber: true })} placeholder="-46.6333" />
+                </div>
               </div>
             </div>
             <Button type="submit" disabled={create.isPending}>

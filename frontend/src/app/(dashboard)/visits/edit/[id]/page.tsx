@@ -22,6 +22,22 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>;
 
+const VISIT_STATUSES = ['AGENDADA', 'REALIZADA', 'CANCELADA', 'REMARCADA'] as const;
+type VisitStatus = (typeof VISIT_STATUSES)[number];
+
+function parseVisitStatus(s: string): VisitStatus {
+  return VISIT_STATUSES.includes(s as VisitStatus) ? (s as VisitStatus) : 'AGENDADA';
+}
+
+type VisitDto = {
+  id: string;
+  scheduledAt: string;
+  status: string;
+  notes?: string;
+  property: { title: string };
+  client?: { name: string };
+};
+
 export default function EditVisitPage() {
   const params = useParams();
   const id = params.id as string;
@@ -32,17 +48,19 @@ export default function EditVisitPage() {
     queryKey: ['visit', id],
     queryFn: async () => {
       const { data } = await api.get(`/visits/${id}`);
-      return data as { id: string; scheduledAt: string; status: string; notes?: string; property: { title: string }; client?: { name: string } };
+      return data as VisitDto;
     },
   });
 
   const { register, handleSubmit } = useForm<FormData>({
     resolver: zodResolver(schema),
-    values: visit ? {
-      scheduledAt: visit.scheduledAt ? new Date(visit.scheduledAt).toISOString().slice(0, 16) : '',
-      status: visit.status,
-      notes: visit.notes ?? '',
-    } : undefined,
+    values: visit
+      ? {
+          scheduledAt: visit.scheduledAt ? new Date(visit.scheduledAt).toISOString().slice(0, 16) : '',
+          status: parseVisitStatus(visit.status),
+          notes: visit.notes ?? '',
+        }
+      : undefined,
   });
 
   const update = useMutation({
@@ -81,7 +99,7 @@ export default function EditVisitPage() {
             Imóvel: <strong>{visit.property?.title}</strong>
             {visit.client && <><br />Cliente: <strong>{visit.client.name}</strong></>}
           </p>
-          <form onSubmit={handleSubmit((d) => update.mutate(d))} className="space-y-4">
+          <form onSubmit={handleSubmit((d: FormData) => update.mutate(d))} className="space-y-4">
             <div>
               <Label>Data e hora</Label>
               <Input type="datetime-local" {...register('scheduledAt')} />

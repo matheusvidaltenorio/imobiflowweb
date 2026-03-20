@@ -17,6 +17,15 @@ const STATUS_LABELS: Record<string, string> = {
   REMARCADA: 'Remarcada',
 };
 
+type VisitRow = {
+  id: string;
+  scheduledAt: string;
+  status: string;
+  property: { id: string; title: string };
+  client?: { name: string };
+  lead?: { name: string; email: string; phone?: string };
+};
+
 export default function VisitsPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -30,15 +39,15 @@ export default function VisitsPage() {
     },
   });
 
-  const visitsByDate = useMemo(() => {
+  const visitsByDate = useMemo((): [string, VisitRow[]][] => {
     if (!visits?.length) return [];
-    const grouped = new Map<string, typeof visits>();
-    for (const v of visits) {
+    const grouped = new Map<string, VisitRow[]>();
+    for (const v of visits as VisitRow[]) {
       const dateKey = formatDate(v.scheduledAt);
       if (!grouped.has(dateKey)) grouped.set(dateKey, []);
       grouped.get(dateKey)!.push(v);
     }
-    for (const arr of grouped.values()) {
+    for (const arr of Array.from(grouped.values())) {
       arr.sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime());
     }
     return Array.from(grouped.entries()).sort(([a], [b]) => {
@@ -94,14 +103,7 @@ export default function VisitsPage() {
                   <span className="text-sm font-normal text-gray-500">({dateVisits.length} visita(s))</span>
                 </h2>
                 <div className="space-y-3">
-                  {dateVisits.map((v: {
-                    id: string;
-                    scheduledAt: string;
-                    status: string;
-                    property: { id: string; title: string };
-                    client?: { name: string };
-                    lead?: { name: string; email: string; phone?: string };
-                  }) => {
+                  {dateVisits.map((v: VisitRow) => {
                     const contactName = v.client?.name || v.lead?.name || 'Sem cliente';
                     return (
                       <Card key={v.id} className="overflow-hidden">

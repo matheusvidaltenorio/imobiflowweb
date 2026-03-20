@@ -130,6 +130,10 @@ No backend (`imobflow-api`), abra **Shell** e rode:
 npx prisma db seed
 ```
 
+Na sua máquina, na pasta `backend`, você também pode usar: `npm run prisma:seed` (equivale ao comando acima).
+
+**Atenção:** o nome correto é **`prisma`** (com **s**). Se digitar `primsa`, o npm tentará instalar um pacote inexistente e retornará erro 404.
+
 Usuários: admin@imobflow.com / admin123 | corretor@imobflow.com / corretor123 | cliente@imobflow.com / cliente123
 
 ---

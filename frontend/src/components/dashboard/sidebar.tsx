@@ -15,6 +15,7 @@ const brokerLinks = [
   { href: '/leads', label: 'Leads' },
   { href: '/clients', label: 'Clientes' },
   { href: '/payments', label: 'Pagamentos' },
+  { href: '/simulacao', label: 'Simulação' },
 ];
 
 const adminLinks = [
@@ -22,6 +23,7 @@ const adminLinks = [
   { href: '/admin/users', label: 'Usuários' },
   { href: '/admin/properties', label: 'Imóveis' },
   { href: '/admin/developments', label: 'Loteamentos' },
+  { href: '/simulacao', label: 'Simulação' },
 ];
 
 const clientLinks = [

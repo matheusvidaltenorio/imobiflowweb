@@ -70,6 +70,7 @@ model User {
   payments      Payment[]
   activityLogs  ActivityLog[]
   refreshTokens RefreshToken[]
+  simulations   Simulation[]
 }
 
 model Property {
@@ -102,6 +103,7 @@ model Property {
   visits          Visit[]
   favorites       Favorite[]
   leads           Lead[]
+  simulations     Simulation[]
 
   @@index([userId])
   @@index([developmentId])
@@ -203,6 +205,7 @@ model Client {
   broker    User     @relation("BrokerClients", fields: [brokerId], references: [id], onDelete: Cascade)
   visits    Visit[]
   leads     Lead[]
+  simulations Simulation[]
 
   @@index([brokerId])
 }
@@ -313,4 +316,36 @@ model PasswordResetToken {
   createdAt DateTime @default(now())
 
   @@index([token])
+}
+
+model Bank {
+  id          String   @id @default(cuid())
+  name        String
+  monthlyRate Decimal  @db.Decimal(10, 8)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([name])
+}
+
+model Simulation {
+  id             String   @id @default(cuid())
+  userId         String
+  clientName     String
+  cpf            String
+  clientPhone    String?
+  income         Decimal  @db.Decimal(12, 2)
+  propertyValue  Decimal  @db.Decimal(14, 2)
+  downPayment    Decimal  @db.Decimal(14, 2)
+  financedAmount Decimal  @db.Decimal(14, 2)
+  clientId       String?
+  propertyId     String?
+  createdAt      DateTime @default(now())
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  client   Client?   @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  property Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([createdAt])
 }

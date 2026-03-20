@@ -79,6 +79,25 @@ async function main() {
     });
   }
 
+  const bankSeeds = [
+    { name: 'Caixa', monthlyRate: 0.007 },
+    { name: 'Banco do Brasil', monthlyRate: 0.008 },
+    { name: 'Itaú', monthlyRate: 0.009 },
+    { name: 'Bradesco', monthlyRate: 0.0095 },
+    { name: 'Santander', monthlyRate: 0.01 },
+  ];
+  for (const b of bankSeeds) {
+    const existing = await prisma.bank.findFirst({ where: { name: b.name } });
+    if (existing) {
+      await prisma.bank.update({
+        where: { id: existing.id },
+        data: { monthlyRate: b.monthlyRate },
+      });
+    } else {
+      await prisma.bank.create({ data: { name: b.name, monthlyRate: b.monthlyRate } });
+    }
+  }
+
   await prisma.property.create({
     data: {
       title: 'Casa com 3 quartos - Vila Mariana',

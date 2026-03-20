@@ -21,7 +21,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       return;
     }
     // Corretor routes: CORRETOR ou ADMIN
-    const brokerRoutes = ['/properties', '/developments', '/lots', '/visits', '/leads', '/clients', '/payments'];
+    const brokerRoutes = [
+      '/properties',
+      '/developments',
+      '/lots',
+      '/visits',
+      '/leads',
+      '/clients',
+      '/payments',
+      '/simulacao',
+    ];
     if (brokerRoutes.some((r) => pathname?.startsWith(r)) && user.role === 'CLIENTE') {
       router.replace('/');
     }

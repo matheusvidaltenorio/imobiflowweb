@@ -35,7 +35,7 @@ export class VisitsService {
     if (data.leadId) {
       await this.prisma.lead.update({
         where: { id: data.leadId },
-        data: { status: 'VISITA' },
+        data: { status: 'NEGOCIACAO' },
       });
     }
 

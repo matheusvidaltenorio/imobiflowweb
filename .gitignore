@@ -13,6 +13,7 @@ frontend/out/
 # Build
 dist/
 build/
+*.tsbuildinfo
 
 # Logs
 *.log

@@ -17,6 +17,9 @@ import { InstallmentsModule } from './installments/installments.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { ClientsModule } from './clients/clients.module';
 import { SimulationsModule } from './simulations/simulations.module';
+import { ProposalsModule } from './proposals/proposals.module';
+import { ContractsModule } from './contracts/contracts.module';
+import { SalesModule } from './sales/sales.module';
 import { CloudinaryModule } from './cloudinary/cloudinary.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
@@ -52,6 +55,9 @@ import { RolesGuard } from './common/guards/roles.guard';
     DashboardModule,
     ClientsModule,
     SimulationsModule,
+    ProposalsModule,
+    ContractsModule,
+    SalesModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

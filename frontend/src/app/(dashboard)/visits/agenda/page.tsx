@@ -13,10 +13,10 @@ import { Sidebar } from '@/components/dashboard/sidebar';
 import { Button } from '@/components/ui/button';
 
 const STATUS_COLORS: Record<string, string> = {
-  AGENDADA: '#2563eb',
-  REALIZADA: '#16a34a',
+  AGENDADA: '#1E4F8A',
+  REALIZADA: '#22C55E',
   CANCELADA: '#dc2626',
-  REMARCADA: '#d97706',
+  REMARCADA: '#FF7A00',
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -65,9 +65,12 @@ export default function AgendaPage() {
   return (
     <div className="flex min-h-screen">
       <Sidebar />
-      <main className="flex-1 p-8">
-        <div className="mb-8 flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Agenda</h1>
+      <main className="flex-1 bg-surface p-6 md:p-10">
+        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight text-primary-950">Agenda</h1>
+            <p className="mt-2 text-gray-600">Visualize compromissos e priorize o dia — visitas bem organizadas fecham mais.</p>
+          </div>
           <div className="flex gap-2">
             <Link href="/visits/new">
               <Button>Nova Visita</Button>
@@ -78,19 +81,19 @@ export default function AgendaPage() {
           </div>
         </div>
 
-        <div className="mb-4 flex flex-wrap gap-2">
+        <div className="mb-6 flex flex-wrap gap-3 rounded-2xl border border-surface-muted bg-white px-4 py-3 shadow-sm">
           {Object.entries(STATUS_COLORS).map(([status, color]) => (
-            <span key={status} className="flex items-center gap-2 text-sm">
-              <span className="h-3 w-3 rounded-full" style={{ backgroundColor: color }} />
+            <span key={status} className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+              <span className="h-3 w-3 rounded-full shadow-sm" style={{ backgroundColor: color }} />
               {STATUS_LABELS[status]}
             </span>
           ))}
         </div>
 
         {isLoading ? (
-          <div className="h-[600px] animate-pulse rounded-xl bg-gray-200" />
+          <div className="h-[600px] animate-pulse rounded-2xl bg-surface-muted/80" />
         ) : (
-          <div className="rounded-xl border bg-white p-4">
+          <div className="rounded-2xl border border-surface-muted bg-white p-4 shadow-card">
             <FullCalendar
               plugins={[dayGridPlugin, timeGridPlugin, listPlugin]}
               initialView="dayGridMonth"

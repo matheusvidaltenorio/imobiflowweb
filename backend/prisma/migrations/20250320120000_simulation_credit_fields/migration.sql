@@ -1,0 +1,6 @@
+-- AlterTable
+ALTER TABLE "Simulation" ADD COLUMN "age" INTEGER;
+ALTER TABLE "Simulation" ADD COLUMN "maritalStatus" TEXT;
+ALTER TABLE "Simulation" ADD COLUMN "dependents" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "Simulation" ADD COLUMN "hasFGTS" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "Simulation" ADD COLUMN "fgtsAmount" DECIMAL(14,2) NOT NULL DEFAULT 0;

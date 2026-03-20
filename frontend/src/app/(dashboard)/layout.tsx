@@ -30,6 +30,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       '/clients',
       '/payments',
       '/simulacao',
+      '/propostas',
+      '/contracts',
     ];
     if (brokerRoutes.some((r) => pathname?.startsWith(r)) && user.role === 'CLIENTE') {
       router.replace('/');
@@ -38,8 +40,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary-600 border-t-transparent" />
+      <div className="flex min-h-screen items-center justify-center bg-surface">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-primary-200 border-t-accent-500" />
+          <p className="text-sm font-medium text-gray-500">Carregando…</p>
+        </div>
       </div>
     );
   }

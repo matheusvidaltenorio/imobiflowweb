@@ -8,9 +8,15 @@ async function main() {
   const brokerHash = await bcrypt.hash('corretor123', 10);
   const clientHash = await bcrypt.hash('cliente123', 10);
 
+  // Sempre atualiza senha no update — assim `npx prisma db seed` corrige login se o usuário já existia
   const admin = await prisma.user.upsert({
     where: { email: 'admin@imobflow.com' },
-    update: {},
+    update: {
+      password: adminHash,
+      name: 'Administrador',
+      role: 'ADMIN',
+      isActive: true,
+    },
     create: {
       email: 'admin@imobflow.com',
       password: adminHash,
@@ -21,7 +27,13 @@ async function main() {
 
   const broker = await prisma.user.upsert({
     where: { email: 'corretor@imobflow.com' },
-    update: {},
+    update: {
+      password: brokerHash,
+      name: 'João Corretor',
+      phone: '11999999999',
+      role: 'CORRETOR',
+      isActive: true,
+    },
     create: {
       email: 'corretor@imobflow.com',
       password: brokerHash,
@@ -33,7 +45,13 @@ async function main() {
 
   const client = await prisma.user.upsert({
     where: { email: 'cliente@imobflow.com' },
-    update: {},
+    update: {
+      password: clientHash,
+      name: 'Maria Cliente',
+      phone: '11888888888',
+      role: 'CLIENTE',
+      isActive: true,
+    },
     create: {
       email: 'cliente@imobflow.com',
       password: clientHash,

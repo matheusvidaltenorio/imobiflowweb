@@ -17,7 +17,7 @@ export function ToasterProvider({ children }: { children: ReactNode }) {
   const toast = useCallback((opts: ToastOptions) => {
     const id = Date.now();
     setToasts((t) => [...t, { ...opts, id }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4000);
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4500);
   }, []);
 
   return (
@@ -32,10 +32,10 @@ export function ToasterProvider({ children }: { children: ReactNode }) {
             description={t.description}
             className={
               t.type === 'error'
-                ? 'border-red-200 bg-red-50'
+                ? 'border-red-200/80 bg-red-50/95 text-red-950 shadow-lg backdrop-blur-sm'
                 : t.type === 'success'
-                  ? 'border-green-200 bg-green-50'
-                  : ''
+                  ? 'border-success-500/25 bg-emerald-50/95 text-emerald-950 shadow-lg backdrop-blur-sm'
+                  : 'border-primary-200/60 bg-white/95 text-primary-950 shadow-lg backdrop-blur-sm'
             }
           />
         ))}

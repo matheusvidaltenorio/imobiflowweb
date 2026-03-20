@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
+import { UserPlus, Building2, Users, Map } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Sidebar } from '@/components/dashboard/sidebar';
 import { Card } from '@/components/ui/card';
@@ -15,49 +16,87 @@ export default function AdminDashboardPage() {
     },
   });
 
-  return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <main className="flex-1 p-8">
-        <h1 className="mb-8 text-2xl font-bold">Painel Administrativo</h1>
+  const tiles = [
+    {
+      label: 'Imóveis',
+      value: data?.propertiesCount ?? 0,
+      href: '/admin/properties',
+      action: 'Gerenciar',
+      icon: Building2,
+      tone: 'from-primary-800 to-primary-700',
+    },
+    {
+      label: 'Usuários',
+      value: '—',
+      href: '/admin/users',
+      action: 'Gerenciar',
+      icon: Users,
+      tone: 'from-primary-700 to-primary-600',
+    },
+    {
+      label: 'Loteamentos',
+      value: '—',
+      href: '/admin/developments',
+      action: 'Gerenciar',
+      icon: Map,
+      tone: 'from-accent-600 to-accent-500',
+    },
+    {
+      label: 'Leads',
+      value: data?.leadsCount ?? 0,
+      href: '/leads',
+      action: 'Ver funil',
+      icon: UserPlus,
+      tone: 'from-success-600 to-success-500',
+    },
+  ];
 
-        {isLoading ? (
-          <div className="grid gap-4 md:grid-cols-4">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="h-24 animate-pulse rounded-xl bg-gray-200" />
-            ))}
+  return (
+    <div className="flex min-h-screen bg-surface">
+      <Sidebar />
+      <main className="flex-1 p-6 md:p-10">
+        <div className="mx-auto max-w-6xl">
+          <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-primary-900 px-3 py-1 text-xs font-bold uppercase tracking-wide text-white">
+            Administração
           </div>
-        ) : (
-          <>
-            <div className="mb-8 grid gap-4 md:grid-cols-4">
-              <Card className="p-6">
-                <p className="text-sm text-gray-500">Imóveis</p>
-                <p className="text-2xl font-bold">{data?.propertiesCount ?? 0}</p>
-                <Link href="/admin/properties" className="mt-2 text-sm text-primary-600 hover:underline">
-                  Gerenciar
-                </Link>
-              </Card>
-              <Card className="p-6">
-                <p className="text-sm text-gray-500">Usuários</p>
-                <p className="text-2xl font-bold">-</p>
-                <Link href="/admin/users" className="mt-2 text-sm text-primary-600 hover:underline">
-                  Gerenciar
-                </Link>
-              </Card>
-              <Card className="p-6">
-                <p className="text-sm text-gray-500">Loteamentos</p>
-                <p className="text-2xl font-bold">-</p>
-                <Link href="/admin/developments" className="mt-2 text-sm text-primary-600 hover:underline">
-                  Gerenciar
-                </Link>
-              </Card>
-              <Card className="p-6">
-                <p className="text-sm text-gray-500">Leads</p>
-                <p className="text-2xl font-bold">{data?.leadsCount ?? 0}</p>
-              </Card>
+          <h1 className="text-3xl font-bold tracking-tight text-primary-950">Painel administrativo</h1>
+          <p className="mt-2 max-w-2xl text-gray-600">
+            Visão consolidada do marketplace. Acesse módulos para manter dados e equipe organizados.
+          </p>
+
+          {isLoading ? (
+            <div className="mt-10 grid gap-4 md:grid-cols-4">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="h-32 animate-pulse rounded-2xl bg-surface-muted/80" />
+              ))}
             </div>
-          </>
-        )}
+          ) : (
+            <div className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              {tiles.map((t) => (
+                <Card key={t.label} className="group relative overflow-hidden p-0">
+                  <div
+                    className={`absolute right-0 top-0 h-20 w-20 translate-x-4 -translate-y-4 rounded-full bg-gradient-to-br ${t.tone} opacity-15 blur-2xl`}
+                  />
+                  <div className="relative p-6">
+                    <div
+                      className={`mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br ${t.tone} text-white shadow-md`}
+                    >
+                      <t.icon className="h-5 w-5" />
+                    </div>
+                    <p className="text-sm font-semibold text-gray-500">{t.label}</p>
+                    <p className="mt-1 text-2xl font-bold tabular-nums text-primary-950">{t.value}</p>
+                    <Link
+                      href={t.href}
+                      className="mt-3 inline-block text-sm font-bold text-accent-600 transition group-hover:text-accent-700"
+                    >
+                      {t.action} →
+                    </Link>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
       </main>
     </div>
   );

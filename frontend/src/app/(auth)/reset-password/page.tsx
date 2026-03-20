@@ -54,21 +54,25 @@ function ResetPasswordForm() {
 
   if (!token) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
-        <Card className="w-full max-w-md">
-          <CardHeader className="space-y-1 text-center">
-            <Link href="/" className="text-2xl font-bold text-primary-600">ImobiFlow</Link>
-            <CardTitle>Link inválido</CardTitle>
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-surface via-white to-primary-50/40 px-4 py-12">
+        <Card className="w-full max-w-md border-primary-100/50 shadow-card">
+          <CardHeader className="space-y-2 text-center">
+            <Link href="/" className="text-2xl font-bold tracking-tight text-primary-950">
+              Imobi<span className="text-accent-500">Flow</span>
+            </Link>
+            <CardTitle className="text-lg text-gray-700">Link inválido</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-gray-600 text-center mb-4">
+            <p className="mb-4 text-center text-sm leading-relaxed text-gray-600">
               O link de recuperação de senha está incompleto ou expirou. Solicite um novo.
             </p>
             <Link href="/forgot-password" className="block">
               <Button className="w-full">Solicitar novo link</Button>
             </Link>
             <p className="mt-4 text-center">
-              <Link href="/login" className="text-sm text-primary-600 hover:underline">Voltar ao login</Link>
+              <Link href="/login" className="text-sm font-semibold text-primary-700 hover:text-primary-800 hover:underline">
+                Voltar ao login
+              </Link>
             </p>
           </CardContent>
         </Card>
@@ -77,14 +81,16 @@ function ResetPasswordForm() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1 text-center">
-          <Link href="/" className="text-2xl font-bold text-primary-600">ImobiFlow</Link>
-          <CardTitle>Redefinir senha</CardTitle>
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-surface via-white to-primary-50/40 px-4 py-12">
+      <Card className="w-full max-w-md border-primary-100/50 shadow-card">
+        <CardHeader className="space-y-2 text-center">
+          <Link href="/" className="text-2xl font-bold tracking-tight text-primary-950">
+            Imobi<span className="text-accent-500">Flow</span>
+          </Link>
+          <CardTitle className="text-lg text-gray-700">Redefinir senha</CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <form method="post" noValidate onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="newPassword">Nova senha</Label>
               <Input id="newPassword" type="password" {...register('newPassword')} />
@@ -100,7 +106,9 @@ function ResetPasswordForm() {
             </Button>
           </form>
           <p className="mt-4 text-center">
-            <Link href="/login" className="text-sm text-primary-600 hover:underline">Voltar ao login</Link>
+            <Link href="/login" className="text-sm font-semibold text-primary-700 hover:text-primary-800 hover:underline">
+              Voltar ao login
+            </Link>
           </p>
         </CardContent>
       </Card>
@@ -110,7 +118,16 @@ function ResetPasswordForm() {
 
 export default function ResetPasswordPage() {
   return (
-    <Suspense fallback={<div className="flex min-h-screen items-center justify-center">Carregando...</div>}>
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-surface">
+          <div className="flex flex-col items-center gap-3">
+            <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-primary-200 border-t-accent-500" />
+            <p className="text-sm font-medium text-gray-500">Carregando…</p>
+          </div>
+        </div>
+      }
+    >
       <ResetPasswordForm />
     </Suspense>
   );

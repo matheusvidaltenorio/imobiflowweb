@@ -48,16 +48,16 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1 text-center">
-          <Link href="/" className="text-2xl font-bold text-primary-600">
-            ImobiFlow
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-surface via-white to-primary-50/40 px-4 py-12">
+      <Card className="w-full max-w-md border-primary-100/50 shadow-card">
+        <CardHeader className="space-y-2 text-center">
+          <Link href="/" className="text-2xl font-bold tracking-tight text-primary-950">
+            Imobi<span className="text-accent-500">Flow</span>
           </Link>
-          <CardTitle>Entre na sua conta</CardTitle>
+          <CardTitle className="text-lg text-gray-700">Entre na sua conta</CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <form method="post" noValidate onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input id="email" type="email" placeholder="seu@email.com" {...register('email')} />

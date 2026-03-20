@@ -1,9 +1,12 @@
 import { Transform } from 'class-transformer';
 import {
   IsBoolean,
+  IsIn,
+  IsInt,
   IsNumber,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
   Min,
   MinLength,
@@ -54,4 +57,31 @@ export class CompareSimulationDto {
   @IsOptional()
   @IsBoolean()
   save?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  @Min(18)
+  @Max(120)
+  age?: number;
+
+  @Transform(emptyToUndefined)
+  @IsOptional()
+  @IsString()
+  @IsIn(['SOLTEIRO', 'CASADO', 'DIVORCIADO', 'VIUVO'])
+  maritalStatus?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  dependents?: number;
+
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true')
+  @IsBoolean()
+  hasFGTS?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  fgtsAmount?: number;
 }

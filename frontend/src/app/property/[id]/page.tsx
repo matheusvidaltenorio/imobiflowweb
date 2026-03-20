@@ -77,39 +77,43 @@ export default function PropertyDetailPage() {
   const shareUrl = typeof window !== 'undefined' ? window.location.href : '';
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="sticky top-0 z-50 border-b bg-white">
+    <div className="min-h-screen bg-surface">
+      <header className="sticky top-0 z-50 border-b border-surface-muted bg-white/95 shadow-sm backdrop-blur-md">
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
-          <Link href="/" className="text-xl font-bold text-primary-600">
-            ImobiFlow
+          <Link href="/" className="text-xl font-bold tracking-tight text-primary-950">
+            Imobi<span className="text-accent-500">Flow</span>
           </Link>
-          <nav className="flex items-center gap-6">
-            <Link href="/search" className="text-sm font-medium text-gray-600 hover:text-primary-600">
+          <nav className="flex items-center gap-5">
+            <Link href="/search" className="text-sm font-semibold text-gray-600 transition hover:text-primary-800">
               Buscar
             </Link>
             {user ? (
               <>
                 <Link
                   href={user.role === 'ADMIN' ? '/admin' : user.role === 'CORRETOR' ? '/dashboard' : '/favorites'}
-                  className="text-sm font-medium text-gray-600 hover:text-primary-600"
+                  className="text-sm font-semibold text-gray-600 transition hover:text-primary-800"
                 >
                   {user.role === 'ADMIN' ? 'Admin' : user.role === 'CORRETOR' ? 'Dashboard' : 'Favoritos'}
                 </Link>
-                <Link href="/profile" className="text-sm font-medium text-gray-600 hover:text-primary-600">
+                <Link href="/profile" className="text-sm font-semibold text-gray-600 transition hover:text-primary-800">
                   Perfil
                 </Link>
-                <button type="button" onClick={logout} className="text-sm font-medium text-gray-600 hover:text-primary-600">
+                <button
+                  type="button"
+                  onClick={logout}
+                  className="text-sm font-semibold text-gray-600 transition hover:text-primary-800"
+                >
                   Sair
                 </button>
               </>
             ) : (
               <>
-                <Link href="/login" className="text-sm font-medium text-gray-600 hover:text-primary-600">
+                <Link href="/login" className="text-sm font-semibold text-gray-600 transition hover:text-primary-800">
                   Entrar
                 </Link>
                 <Link
                   href="/register"
-                  className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
+                  className="rounded-xl bg-accent-500 px-4 py-2.5 text-sm font-bold text-white shadow-cta transition hover:bg-accent-600"
                 >
                   Cadastrar
                 </Link>
@@ -119,18 +123,23 @@ export default function PropertyDetailPage() {
         </div>
       </header>
 
-      <main className="container mx-auto max-w-4xl px-4 py-8">
+      <main className="container mx-auto max-w-4xl px-4 py-8 md:py-12">
         <div className="mb-6 flex flex-wrap gap-2">
-          <span className="rounded-full bg-primary-100 px-3 py-1 text-sm font-medium text-primary-700">
+          <span className="rounded-full bg-primary-100 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-primary-800 ring-1 ring-primary-200/50">
             {property.type}
           </span>
-          <span className="rounded-full bg-gray-100 px-3 py-1 text-sm text-gray-700">{property.status}</span>
+          <span className="rounded-full bg-surface-muted px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-gray-700">
+            {property.status}
+          </span>
         </div>
 
-        <h1 className="mb-4 text-2xl font-bold">{property.title}</h1>
-        <p className="mb-6 text-2xl font-bold text-primary-600">{formatPrice(Number(property.price))}</p>
+        <h1 className="mb-3 text-3xl font-bold tracking-tight text-primary-950 md:text-4xl">{property.title}</h1>
+        <p className="mb-2 text-3xl font-bold text-accent-600 md:text-4xl">{formatPrice(Number(property.price))}</p>
+        <p className="mb-8 text-sm font-medium text-gray-500">
+          Valor de referência — fale com o corretor para condições e visita.
+        </p>
 
-        <div className="relative mb-8 h-96 overflow-hidden rounded-xl bg-gray-200">
+        <div className="relative mb-8 h-96 overflow-hidden rounded-2xl bg-surface-muted shadow-card ring-1 ring-black/5">
           {property.images?.[0]?.url ? (
             <Image src={property.images[0].url} alt={property.title} fill className="object-cover" priority />
           ) : (
@@ -150,26 +159,26 @@ export default function PropertyDetailPage() {
 
         <div className="mb-8 grid gap-4 sm:grid-cols-4">
           {property.bedrooms != null && (
-            <div className="rounded-lg border bg-white p-4 text-center">
-              <p className="text-2xl font-bold text-primary-600">{property.bedrooms}</p>
+            <div className="rounded-xl border border-surface-muted bg-white p-4 text-center shadow-sm">
+              <p className="text-2xl font-bold text-primary-800">{property.bedrooms}</p>
               <p className="text-sm text-gray-500">Quartos</p>
             </div>
           )}
           {property.bathrooms != null && (
-            <div className="rounded-lg border bg-white p-4 text-center">
-              <p className="text-2xl font-bold text-primary-600">{property.bathrooms}</p>
+            <div className="rounded-xl border border-surface-muted bg-white p-4 text-center shadow-sm">
+              <p className="text-2xl font-bold text-primary-800">{property.bathrooms}</p>
               <p className="text-sm text-gray-500">Banheiros</p>
             </div>
           )}
           {property.area != null && (
-            <div className="rounded-lg border bg-white p-4 text-center">
-              <p className="text-2xl font-bold text-primary-600">{property.area}m²</p>
+            <div className="rounded-xl border border-surface-muted bg-white p-4 text-center shadow-sm">
+              <p className="text-2xl font-bold text-primary-800">{property.area}m²</p>
               <p className="text-sm text-gray-500">Área</p>
             </div>
           )}
           {property.garageSpaces != null && (
-            <div className="rounded-lg border bg-white p-4 text-center">
-              <p className="text-2xl font-bold text-primary-600">{property.garageSpaces}</p>
+            <div className="rounded-xl border border-surface-muted bg-white p-4 text-center shadow-sm">
+              <p className="text-2xl font-bold text-primary-800">{property.garageSpaces}</p>
               <p className="text-sm text-gray-500">Vagas</p>
             </div>
           )}
@@ -207,7 +216,7 @@ export default function PropertyDetailPage() {
                   })}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="mt-2 inline-block text-sm text-primary-600 hover:underline"
+                  className="mt-2 inline-block text-sm font-bold text-accent-600 hover:text-accent-700 hover:underline"
                 >
                   Abrir no Google Maps para rotas
                 </a>
@@ -230,7 +239,7 @@ export default function PropertyDetailPage() {
                   })}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
+                  className="inline-flex items-center gap-2 rounded-xl bg-primary-800 px-4 py-2.5 text-sm font-bold text-white shadow-md transition hover:bg-primary-900"
                 >
                   Ver no Google Maps
                 </a>
@@ -256,9 +265,9 @@ export default function PropertyDetailPage() {
               href={whatsappLink}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
+              className="inline-flex items-center gap-2 rounded-xl bg-success-600 px-5 py-2.5 text-sm font-bold text-white shadow-md shadow-success-600/25 transition hover:bg-success-700"
             >
-              WhatsApp
+              WhatsApp com corretor
             </a>
           )}
           <Button
@@ -272,8 +281,9 @@ export default function PropertyDetailPage() {
           </Button>
         </div>
 
-        <div className="mt-12 rounded-xl border bg-white p-6">
-          <h2 className="mb-4 font-semibold">Tenho interesse</h2>
+        <div className="mt-12 rounded-2xl border border-surface-muted bg-white p-6 shadow-card md:p-8">
+          <h2 className="mb-1 text-lg font-bold text-primary-950">Tenho interesse</h2>
+          <p className="mb-4 text-sm text-gray-500">Deixe seus dados — o corretor retorna rapidamente.</p>
           <LeadForm propertyId={id} />
         </div>
       </main>

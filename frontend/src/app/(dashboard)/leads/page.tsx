@@ -35,18 +35,18 @@ const COLUMNS = [
 type LeadStatus = (typeof COLUMNS)[number]['id'];
 
 const COLUMN_COLORS: Record<LeadStatus, string> = {
-  PROSPECCAO: 'bg-gray-100 border-gray-200',
-  QUALIFICACAO: 'bg-blue-50 border-blue-200',
-  NEGOCIACAO: 'bg-amber-50 border-amber-200',
-  VENDIDO: 'bg-green-50 border-green-200',
-  PERDIDO: 'bg-red-50 border-red-200',
+  PROSPECCAO: 'bg-surface border-surface-muted shadow-sm',
+  QUALIFICACAO: 'bg-primary-50/80 border-primary-200/80',
+  NEGOCIACAO: 'bg-accent-50/60 border-accent-200/70',
+  VENDIDO: 'bg-emerald-50/90 border-success-500/25',
+  PERDIDO: 'bg-red-50/90 border-red-200',
 };
 
 const CARD_ACCENT: Record<LeadStatus, string> = {
-  PROSPECCAO: 'border-l-gray-400',
-  QUALIFICACAO: 'border-l-blue-500',
-  NEGOCIACAO: 'border-l-amber-500',
-  VENDIDO: 'border-l-green-600',
+  PROSPECCAO: 'border-l-primary-300',
+  QUALIFICACAO: 'border-l-primary-600',
+  NEGOCIACAO: 'border-l-accent-500',
+  VENDIDO: 'border-l-success-600',
   PERDIDO: 'border-l-red-500',
 };
 
@@ -122,23 +122,23 @@ function LeadCard({
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
-              className="inline-flex items-center gap-1 rounded bg-green-600 px-2 py-1 text-xs font-medium text-white hover:bg-green-700"
+              className="inline-flex items-center gap-1 rounded-lg bg-success-600 px-2.5 py-1.5 text-xs font-bold text-white shadow-md shadow-success-600/25 transition hover:bg-success-700"
             >
-              <MessageCircle className="h-3 w-3" />
+              <MessageCircle className="h-3.5 w-3.5" />
               WhatsApp
             </a>
           )}
           {status !== 'VENDIDO' && status !== 'PERDIDO' && (
             <Button
-              variant="outline"
+              variant="default"
               size="sm"
-              className="h-7 gap-1 px-2 text-xs"
+              className="h-8 gap-1 px-2.5 text-xs font-bold"
               onClick={(e) => {
                 e.stopPropagation();
                 onScheduleVisit();
               }}
             >
-              <Calendar className="h-3 w-3" />
+              <Calendar className="h-3.5 w-3.5" />
               Agendar visita
             </Button>
           )}
@@ -211,12 +211,12 @@ function KanbanColumn({
       className={cn(
         'flex min-w-[280px] flex-col rounded-lg border-2 transition-colors',
         COLUMN_COLORS[status],
-        isOver && 'ring-2 ring-primary-400 ring-offset-2'
+        isOver && 'ring-2 ring-accent-400 ring-offset-2'
       )}
     >
-      <div className="flex items-center justify-between border-b px-4 py-3">
-        <h3 className="font-semibold text-gray-800">{column.label}</h3>
-        <span className="rounded-full bg-white px-2.5 py-0.5 text-sm font-medium text-gray-600">
+      <div className="flex items-center justify-between border-b border-inherit bg-white/50 px-4 py-3 backdrop-blur-sm">
+        <h3 className="text-sm font-bold uppercase tracking-wide text-primary-950">{column.label}</h3>
+        <span className="rounded-full bg-primary-950 px-2.5 py-0.5 text-xs font-bold text-white tabular-nums">
           {leads.length}
         </span>
       </div>
@@ -306,13 +306,19 @@ export default function LeadsPage() {
   return (
     <div className="flex min-h-screen">
       <Sidebar />
-      <main className="flex-1 overflow-hidden p-8">
-        <h1 className="mb-6 text-2xl font-bold">Funil de Leads</h1>
+      <main className="flex-1 overflow-hidden bg-surface p-6 md:p-10">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold tracking-tight text-primary-950">Funil de leads</h1>
+          <p className="mt-2 max-w-2xl text-gray-600">
+            Arraste os cards entre etapas, responda rápido no WhatsApp e agende visitas — cada movimento aproxima a
+            venda.
+          </p>
+        </div>
 
         {isLoading ? (
           <div className="flex gap-4 overflow-x-auto pb-4">
             {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="h-80 min-w-[280px] animate-pulse rounded-lg bg-gray-200" />
+              <div key={i} className="h-80 min-w-[280px] animate-pulse rounded-2xl bg-surface-muted/80" />
             ))}
           </div>
         ) : (

@@ -22,6 +22,41 @@ export type SimulationOptionRow = {
   approved: boolean;
 };
 
+export type SimulationCompareWarnings = {
+  ageReducedTerms: boolean;
+  dependentsReducedInstallmentLimit: boolean;
+  fgtsReducedPrincipal: boolean;
+};
+
+/** Prazos permitidos: idade + anos de financiamento <= 80 */
+function buildAllowedTerms(age: number | undefined): { terms: number[]; ageLimited: boolean } {
+  if (age === undefined || age === null) {
+    return { terms: [...TERMS_MONTHS], ageLimited: false };
+  }
+  const maxMonths = Math.floor((80 - age) * 12);
+  if (maxMonths < 12) {
+    throw new BadRequestException(
+      'Limite de idade não permite financiamento com prazo mínimo de 12 meses ao final do contrato',
+    );
+  }
+  let terms: number[] = TERMS_MONTHS.filter((n) => n <= maxMonths);
+  const isFullStandardSet =
+    terms.length === TERMS_MONTHS.length && TERMS_MONTHS.every((t) => terms.includes(t));
+  if (terms.length === 0) {
+    const capped = Math.min(maxMonths, 360);
+    const rounded = Math.floor(capped / 12) * 12;
+    if (rounded < 12) {
+      throw new BadRequestException('Nenhum prazo compatível com o limite de 80 anos ao final do financiamento');
+    }
+    terms = [rounded];
+  }
+  const usesOnlyStandardTerms = terms.every((t) =>
+    TERMS_MONTHS.includes(t as (typeof TERMS_MONTHS)[number]),
+  );
+  const ageLimited = !isFullStandardSet || !usesOnlyStandardTerms;
+  return { terms, ageLimited };
+}
+
 @Injectable()
 export class SimulationsService {
   constructor(private prisma: PrismaService) {}
@@ -51,14 +86,33 @@ export class SimulationsService {
     const income = dto.income;
     const propertyValue = dto.propertyValue;
     const downPayment = dto.downPayment;
-    const financedAmount = propertyValue - downPayment;
+    const grossFinanced = propertyValue - downPayment;
 
     if (downPayment >= propertyValue) {
       throw new BadRequestException('A entrada deve ser menor que o valor do imóvel');
     }
-    if (financedAmount <= 0) {
+    if (grossFinanced <= 0) {
       throw new BadRequestException('O valor financiado deve ser positivo');
     }
+
+    const hasFGTS = dto.hasFGTS === true;
+    const fgtsAmt = hasFGTS ? Math.max(0, dto.fgtsAmount ?? 0) : 0;
+    const principal = this.round2(grossFinanced - fgtsAmt);
+    if (principal <= 0) {
+      throw new BadRequestException('O valor financiado após abatimento do FGTS deve ser positivo');
+    }
+
+    const depCount = dto.dependents ?? 0;
+    const incomeLimitPct = depCount >= 3 ? 0.25 : 0.3;
+    const maxInstallment = income * incomeLimitPct;
+
+    const { terms: allowedTerms, ageLimited } = buildAllowedTerms(dto.age);
+
+    const warnings: SimulationCompareWarnings = {
+      ageReducedTerms: ageLimited,
+      dependentsReducedInstallmentLimit: depCount >= 3,
+      fgtsReducedPrincipal: hasFGTS && fgtsAmt > 0,
+    };
 
     if (dto.clientId) {
       const client = await this.prisma.client.findUnique({ where: { id: dto.clientId } });
@@ -82,12 +136,11 @@ export class SimulationsService {
     }
 
     const rows: SimulationOptionRow[] = [];
-    const maxInstallment = income * 0.3;
 
     for (const bank of banks) {
       const i = Number(bank.monthlyRate);
-      for (const n of TERMS_MONTHS) {
-        const rawInstallment = this.pricePmt(financedAmount, i, n);
+      for (const n of allowedTerms) {
+        const rawInstallment = this.pricePmt(principal, i, n);
         const installment = this.round2(rawInstallment);
         const totalCost = this.round2(installment * n);
         const approved = installment <= maxInstallment + 1e-6;
@@ -134,7 +187,12 @@ export class SimulationsService {
           income: new Decimal(income),
           propertyValue: new Decimal(propertyValue),
           downPayment: new Decimal(downPayment),
-          financedAmount: new Decimal(financedAmount),
+          financedAmount: new Decimal(grossFinanced),
+          age: dto.age ?? null,
+          maritalStatus: dto.maritalStatus ?? null,
+          dependents: depCount,
+          hasFGTS,
+          fgtsAmount: new Decimal(fgtsAmt),
           clientId: dto.clientId ?? null,
           propertyId: dto.propertyId ?? null,
         },
@@ -142,7 +200,11 @@ export class SimulationsService {
     }
 
     return {
-      financedAmount: this.round2(financedAmount),
+      financedAmount: this.round2(grossFinanced),
+      netFinancedAmount: this.round2(principal),
+      installmentIncomeLimitPercent: incomeLimitPct === 0.25 ? 25 : 30,
+      allowedTermsMonths: allowedTerms,
+      warnings,
       ranked,
       bestKey,
       bestOption,

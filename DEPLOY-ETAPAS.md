@@ -120,6 +120,8 @@ Para Next.js com todas as funções (SSR, rotas dinâmicas), use **Web Service**
 
 5. Clique em **Create Web Service**
 
+**Estilos (Tailwind) sumiram?** Não adicione `output: 'export'` no `next.config.js` neste fluxo. Limpe o cache de build no Render (**Clear build cache**), redeploy, e localmente apague `frontend/.next` antes de `npm run build`. No DevTools → Network, o CSS em `/_next/static/css/` deve retornar 200 e conter regras como `.flex{`, não `@tailwind` cru.
+
 ---
 
 ## Após o primeiro deploy

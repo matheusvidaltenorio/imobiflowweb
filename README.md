@@ -52,6 +52,11 @@ npm run dev
 
 O frontend estará em `http://localhost:3000`.
 
+### Frontend: páginas “só HTML” / sem Tailwind
+
+- **Não use** `output: 'export'` no [`frontend/next.config.js`](frontend/next.config.js) salvo deploy explícito como **Static Site** (site estático); no fluxo normal (Web Service / Vercel) isso quebra o pipeline esperado do Next.
+- Se o visual sumir: apague a pasta `frontend/.next`, rode `npm install` e `npm run build` (ou `npm run dev`). No navegador (DevTools → Network → CSS), confira se `/_next/static/css/...` retorna **200** e o arquivo contém classes compiladas (ex.: `.flex{`), não linhas cruas `@tailwind`.
+
 ### Usuários seed
 
 - **Admin**: admin@imobflow.com / admin123

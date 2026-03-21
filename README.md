@@ -19,6 +19,17 @@ Sistema completo de marketplace imobiliário com gestão para corretores e paine
 
 ## Como rodar localmente
 
+### Opção rápida: API + frontend juntos
+
+Na **raiz** do repositório (pasta `ImobiFlow-Web`):
+
+```bash
+npm install
+npm run dev
+```
+
+Isso sobe o **backend** (porta **3333**) e o **frontend** (porta **3002**) ao mesmo tempo. Sem a API em 3333 o login retorna erro de conexão.
+
 ### 1. Banco de dados (Supabase)
 
 1. Crie uma conta em [Supabase](https://supabase.com)
@@ -50,7 +61,7 @@ cp ../.env.example .env.local
 npm run dev
 ```
 
-O frontend estará em `http://localhost:3000`.
+O frontend estará em `http://localhost:3002` (configurado em `frontend/package.json`).
 
 ### Frontend: páginas “só HTML” / sem Tailwind
 

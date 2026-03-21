@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { isAxiosError } from 'axios';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
@@ -40,7 +41,14 @@ export default function LoginPage() {
       router.push('/');
       router.refresh();
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Erro ao entrar';
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3333/api';
+      let msg = 'Erro ao entrar';
+      if (isAxiosError(err) && !err.response) {
+        msg = `API indisponível (${apiUrl}). Abra outro terminal na pasta do projeto e rode: npm run dev (na raiz) ou npm run dev na pasta backend — a API usa a porta 3333.`;
+      } else if (isAxiosError(err) && err.response?.data) {
+        const d = err.response.data as { message?: string | string[] };
+        msg = Array.isArray(d.message) ? d.message.join(', ') : d.message ?? msg;
+      }
       toast({ title: 'Erro', description: msg, type: 'error' });
     } finally {
       setLoading(false);

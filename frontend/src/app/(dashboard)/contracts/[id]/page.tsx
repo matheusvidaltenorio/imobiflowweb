@@ -3,7 +3,8 @@
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Loader2, MessageCircle } from 'lucide-react';
+import { useState } from 'react';
+import { FileDown, Loader2, MessageCircle } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toWhatsAppDigits } from '@/lib/masks';
 import { formatDate, formatPrice } from '@/lib/utils';
@@ -12,6 +13,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toaster';
 import { cn } from '@/lib/utils';
+import { buildContractPdfBlob } from '@/lib/contract-pdf-jspdf';
 
 type ContractStatus = 'DRAFT' | 'READY' | 'SIGNED' | 'CANCELLED';
 
@@ -75,6 +77,7 @@ export default function ContractDetailPage() {
   const router = useRouter();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   const { data: contract, isLoading, isError } = useQuery({
     queryKey: ['contract', id],
@@ -167,6 +170,52 @@ export default function ContractDetailPage() {
   const canConfirm =
     !contract.sale && (contract.status === 'READY' || contract.status === 'DRAFT');
 
+  const downloadContractPdf = async () => {
+    setPdfLoading(true);
+    try {
+      const blob = buildContractPdfBlob({
+        contractText: contract.contractText,
+        clientName: contract.client?.name ?? 'Cliente',
+        clientEmail: contract.client?.email,
+        clientCpf: contract.clientCpf,
+        propertyTitle: contract.property?.title ?? null,
+        bankName: contract.bankName,
+        totalValue: num(contract.totalValue),
+        downPayment: num(contract.downPayment),
+        financedAmount: num(contract.financedAmount),
+        installmentValue: num(contract.installmentValue),
+        months: contract.months,
+        brokerName: contract.user.name,
+        contractDateLabel: formatDate(contract.createdAt),
+        statusLabel: STATUS_LABEL[contract.status],
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `contrato-imobiflow-${contract.id.slice(0, 10)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast({ type: 'success', title: 'PDF gerado', description: 'O download deve iniciar automaticamente.' });
+    } catch (e) {
+      console.error('[PDF]', e);
+      const msg =
+        e instanceof Error
+          ? e.message
+          : typeof e === 'string'
+            ? e
+            : 'Falha ao montar o PDF. Veja o console (F12) para detalhes.';
+      toast({
+        type: 'error',
+        title: 'Erro ao gerar PDF',
+        description: msg || 'Tente novamente ou use outro navegador.',
+      });
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
   return (
     <div className="flex min-h-screen bg-surface">
       <Sidebar />
@@ -254,6 +303,20 @@ export default function ContractDetailPage() {
             <Button type="button" variant="outline" onClick={openWhatsAppSummary}>
               <MessageCircle className="mr-2 h-4 w-4" />
               Enviar resumo no WhatsApp
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="border-primary-700 text-primary-800 hover:bg-primary-50"
+              disabled={pdfLoading}
+              onClick={() => void downloadContractPdf()}
+            >
+              {pdfLoading ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <FileDown className="mr-2 h-4 w-4" />
+              )}
+              Baixar PDF do contrato
             </Button>
             {canConfirm && (
               <Button

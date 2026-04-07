@@ -9,7 +9,6 @@ import { useMutation } from '@tanstack/react-query';
 import { MapPin, Loader2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { geocodeAddress } from '@/lib/geocode';
-import { Sidebar } from '@/components/dashboard/sidebar';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -102,9 +101,7 @@ export default function NewPropertyPage() {
   });
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <main className="flex-1 p-8">
+    <main className="p-8">
         <h1 className="mb-8 text-2xl font-bold">Novo Imóvel</h1>
 
         <Card className="max-w-2xl p-6">
@@ -230,7 +227,6 @@ export default function NewPropertyPage() {
             </Button>
           </form>
         </Card>
-      </main>
-    </div>
+    </main>
   );
 }

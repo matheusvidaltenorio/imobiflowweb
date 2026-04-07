@@ -4,7 +4,6 @@ import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { Building2, CalendarDays, Heart, Sparkles, Users, ArrowRight } from 'lucide-react';
 import { api } from '@/lib/api';
-import { Sidebar } from '@/components/dashboard/sidebar';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth-context';
@@ -31,22 +30,17 @@ export default function DashboardPage() {
 
   if (user?.role === 'CLIENTE') {
     return (
-      <div className="flex min-h-screen bg-surface">
-        <Sidebar />
-        <main className="flex-1 p-6 md:p-10">
-          <h1 className="text-2xl font-bold text-primary-950">Área do Cliente</h1>
-          <p className="mt-2 max-w-lg text-gray-600">
-            Explore favoritos e interesses pelo menu. Estamos aqui para ajudar na sua escolha.
-          </p>
-        </main>
-      </div>
+      <main className="p-6 md:p-10">
+        <h1 className="text-2xl font-bold text-primary-950">Área do Cliente</h1>
+        <p className="mt-2 max-w-lg text-gray-600">
+          Explore favoritos e interesses pelo menu. Estamos aqui para ajudar na sua escolha.
+        </p>
+      </main>
     );
   }
 
   return (
-    <div className="flex min-h-screen bg-surface">
-      <Sidebar />
-      <main className="flex-1 overflow-auto p-6 md:p-10">
+    <main className="p-6 md:p-10">
         <div className="mx-auto max-w-6xl">
           <div className="mb-2 flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-1 rounded-full bg-primary-100 px-3 py-1 text-xs font-bold uppercase tracking-wide text-primary-800">
@@ -201,7 +195,6 @@ export default function DashboardPage() {
             </>
           )}
         </div>
-      </main>
-    </div>
+    </main>
   );
 }

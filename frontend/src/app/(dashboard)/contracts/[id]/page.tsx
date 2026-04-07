@@ -8,7 +8,6 @@ import { FileDown, Loader2, MessageCircle } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toWhatsAppDigits } from '@/lib/masks';
 import { formatDate, formatPrice } from '@/lib/utils';
-import { Sidebar } from '@/components/dashboard/sidebar';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toaster';
@@ -144,26 +143,20 @@ export default function ContractDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen bg-surface">
-        <Sidebar />
-        <main className="flex flex-1 items-center justify-center p-8">
+      <main className="flex min-h-[60vh] items-center justify-center p-8">
           <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
-        </main>
-      </div>
+      </main>
     );
   }
 
   if (isError || !contract) {
     return (
-      <div className="flex min-h-screen bg-surface">
-        <Sidebar />
-        <main className="flex flex-1 flex-col items-center justify-center gap-4 p-8">
+      <main className="flex min-h-[60vh] flex-col items-center justify-center gap-4 p-8">
           <p className="text-gray-600">Contrato não encontrado ou sem permissão.</p>
           <Link href="/contracts" className="text-primary-600 hover:underline">
             Voltar à lista
           </Link>
-        </main>
-      </div>
+      </main>
     );
   }
 
@@ -217,9 +210,7 @@ export default function ContractDetailPage() {
   };
 
   return (
-    <div className="flex min-h-screen bg-surface">
-      <Sidebar />
-      <main className="flex-1 overflow-auto p-6 md:p-8">
+    <main className="p-6 md:p-8">
         <div className="mx-auto max-w-4xl space-y-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
@@ -360,7 +351,6 @@ export default function ContractDetailPage() {
             </Card>
           ) : null}
         </div>
-      </main>
-    </div>
+    </main>
   );
 }

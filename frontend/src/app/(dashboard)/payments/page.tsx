@@ -5,7 +5,6 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { formatPrice } from '@/lib/utils';
 import { formatDate } from '@/lib/utils';
-import { Sidebar } from '@/components/dashboard/sidebar';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
@@ -19,9 +18,7 @@ export default function PaymentsPage() {
   });
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <main className="flex-1 p-8">
+    <main className="p-8">
         <div className="mb-8 flex items-center justify-between">
           <h1 className="text-2xl font-bold">Pagamentos</h1>
           <Link href="/payments/new">
@@ -63,7 +60,6 @@ export default function PaymentsPage() {
         ) : (
           <p className="text-gray-500">Nenhum pagamento cadastrado. <Link href="/payments/new" className="text-primary-600 hover:underline">Cadastrar primeiro pagamento</Link></p>
         )}
-      </main>
-    </div>
+    </main>
   );
 }

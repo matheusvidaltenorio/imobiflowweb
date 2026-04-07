@@ -6,7 +6,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { Sidebar } from '@/components/dashboard/sidebar';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,9 +43,7 @@ export default function NewClientPage() {
   });
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <main className="flex-1 p-8">
+    <main className="p-8">
         <div className="mb-8 flex items-center justify-between">
           <h1 className="text-2xl font-bold">Novo Cliente</h1>
           <Link href="/clients">
@@ -79,7 +76,6 @@ export default function NewClientPage() {
             </Button>
           </form>
         </Card>
-      </main>
-    </div>
+    </main>
   );
 }

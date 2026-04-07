@@ -4,7 +4,6 @@ import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { UserPlus, Building2, Users, Map } from 'lucide-react';
 import { api } from '@/lib/api';
-import { Sidebar } from '@/components/dashboard/sidebar';
 import { Card } from '@/components/ui/card';
 
 export default function AdminDashboardPage() {
@@ -52,9 +51,7 @@ export default function AdminDashboardPage() {
   ];
 
   return (
-    <div className="flex min-h-screen bg-surface">
-      <Sidebar />
-      <main className="flex-1 p-6 md:p-10">
+    <main className="p-6 md:p-10">
         <div className="mx-auto max-w-6xl">
           <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-primary-900 px-3 py-1 text-xs font-bold uppercase tracking-wide text-white">
             Administração
@@ -97,7 +94,6 @@ export default function AdminDashboardPage() {
             </div>
           )}
         </div>
-      </main>
-    </div>
+    </main>
   );
 }

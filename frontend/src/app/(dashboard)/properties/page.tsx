@@ -5,7 +5,6 @@ import Image from 'next/image';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { formatPrice } from '@/lib/utils';
-import { Sidebar } from '@/components/dashboard/sidebar';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -27,9 +26,7 @@ export default function PropertiesPage() {
   });
 
   return (
-    <div className="flex min-h-screen bg-surface">
-      <Sidebar />
-      <main className="flex-1 p-6 md:p-10">
+    <main className="p-6 md:p-10">
         <div className="mx-auto max-w-6xl">
           <div className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
@@ -113,7 +110,6 @@ export default function PropertiesPage() {
             </Card>
           )}
         </div>
-      </main>
-    </div>
+    </main>
   );
 }

@@ -55,13 +55,13 @@ export function Sidebar() {
 
   if (!isBrokerNav) {
     return (
-      <aside className="flex w-64 flex-col border-r border-surface-muted bg-white shadow-sm">
-        <div className="flex h-16 items-center border-b border-surface-muted px-4">
+      <aside className="flex h-full min-h-0 w-64 shrink-0 flex-col border-r border-surface-muted bg-white shadow-sm">
+        <div className="flex h-16 shrink-0 items-center border-b border-surface-muted px-4">
           <Link href="/" className="text-lg font-bold tracking-tight text-primary-900">
             Imobi<span className="text-accent-500">Flow</span>
           </Link>
         </div>
-        <nav className="flex-1 space-y-1 p-4">
+        <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto p-4">
           {links.map((link) => (
             <Link
               key={link.href}
@@ -77,7 +77,7 @@ export function Sidebar() {
             </Link>
           ))}
         </nav>
-        <div className="border-t border-surface-muted p-4">
+        <div className="shrink-0 border-t border-surface-muted p-4">
           <p className="truncate text-sm font-medium text-gray-700">{user?.name}</p>
           <button type="button" onClick={logout} className="mt-2 text-sm font-semibold text-accent-600 hover:text-accent-700">
             Sair
@@ -88,13 +88,13 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="flex w-64 flex-shrink-0 flex-col border-r border-primary-900/50 bg-gradient-to-b from-primary-950 via-primary-900 to-primary-950 text-primary-100 shadow-xl shadow-primary-950/25">
-      <div className="flex h-16 items-center border-b border-primary-800/60 px-4">
+    <aside className="flex h-full min-h-0 w-64 shrink-0 flex-col border-r border-primary-900/50 bg-gradient-to-b from-primary-950 via-primary-900 to-primary-950 text-primary-100 shadow-xl shadow-primary-950/25">
+      <div className="flex h-16 shrink-0 items-center border-b border-primary-800/60 px-4">
         <Link href="/" className="text-lg font-bold tracking-tight text-white">
           Imobi<span className="text-accent-400">Flow</span>
         </Link>
       </div>
-      <nav className="flex-1 space-y-0.5 overflow-y-auto p-3">
+      <nav className="min-h-0 flex-1 space-y-0.5 overflow-y-auto p-3">
         {links.map((link) => {
           const active = isActivePath(pathname, link.href);
           return (
@@ -113,7 +113,7 @@ export function Sidebar() {
           );
         })}
       </nav>
-      <div className="border-t border-primary-800/60 p-4">
+      <div className="shrink-0 border-t border-primary-800/60 p-4">
         <p className="truncate text-sm font-medium text-primary-100">{user?.name}</p>
         <button
           type="button"

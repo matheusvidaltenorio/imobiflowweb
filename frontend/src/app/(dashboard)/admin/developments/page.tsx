@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { Sidebar } from '@/components/dashboard/sidebar';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
@@ -17,9 +16,7 @@ export default function AdminDevelopmentsPage() {
   });
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <main className="flex-1 p-8">
+    <main className="p-8">
         <h1 className="mb-8 text-2xl font-bold">Loteamentos (Admin)</h1>
 
         {isLoading ? (
@@ -52,7 +49,6 @@ export default function AdminDevelopmentsPage() {
         ) : (
           <p className="text-gray-500">Nenhum loteamento.</p>
         )}
-      </main>
-    </div>
+    </main>
   );
 }

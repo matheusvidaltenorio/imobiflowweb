@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { formatDate, formatPrice } from '@/lib/utils';
-import { Sidebar } from '@/components/dashboard/sidebar';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
@@ -53,9 +52,7 @@ export default function ContractsPage() {
   });
 
   return (
-    <div className="flex min-h-screen bg-surface">
-      <Sidebar />
-      <main className="flex-1 overflow-auto p-6 md:p-8">
+    <main className="p-6 md:p-8">
         <div className="mx-auto max-w-5xl">
           <h1 className="text-3xl font-bold tracking-tight text-primary-950">Contratos</h1>
           <p className="mt-2 max-w-2xl text-base text-gray-600">
@@ -122,7 +119,6 @@ export default function ContractsPage() {
             </div>
           )}
         </div>
-      </main>
-    </div>
+    </main>
   );
 }

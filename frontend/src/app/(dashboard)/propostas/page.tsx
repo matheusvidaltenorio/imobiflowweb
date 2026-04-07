@@ -7,7 +7,6 @@ import { useState } from 'react';
 import { Check, FileSignature, Link2, Loader2, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { cn, formatDate, formatPrice } from '@/lib/utils';
-import { Sidebar } from '@/components/dashboard/sidebar';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -145,9 +144,7 @@ export default function PropostasPage() {
       : null;
 
   return (
-    <div className="flex min-h-screen bg-surface">
-      <Sidebar />
-      <main className="flex-1 overflow-auto p-6 md:p-8">
+    <main className="p-6 md:p-8">
         <div className="mx-auto max-w-5xl">
           <div className="mb-2 inline-flex rounded-full bg-primary-100 px-3 py-1 text-xs font-bold uppercase tracking-wide text-primary-800">
             Documento comercial
@@ -358,7 +355,6 @@ export default function PropostasPage() {
             </p>
           )}
         </div>
-      </main>
-    </div>
+    </main>
   );
 }

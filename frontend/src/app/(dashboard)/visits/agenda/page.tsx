@@ -9,7 +9,6 @@ import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import listPlugin from '@fullcalendar/list';
 import ptBrLocale from '@fullcalendar/core/locales/pt-br';
-import { Sidebar } from '@/components/dashboard/sidebar';
 import { Button } from '@/components/ui/button';
 
 const STATUS_COLORS: Record<string, string> = {
@@ -63,9 +62,7 @@ export default function AgendaPage() {
   }, [visits]);
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <main className="flex-1 bg-surface p-6 md:p-10">
+    <main className="bg-surface p-6 md:p-10">
         <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-primary-950">Agenda</h1>
@@ -119,7 +116,6 @@ export default function AgendaPage() {
             />
           </div>
         )}
-      </main>
-    </div>
+    </main>
   );
 }

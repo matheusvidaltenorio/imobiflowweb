@@ -19,18 +19,61 @@ Sistema completo de marketplace imobiliário com gestão para corretores e paine
 
 ## Como rodar localmente
 
+### Site “fora do ar” mesmo com Docker aberto?
+
+**O `docker compose` deste repo só sobe o banco (PostgreSQL).** Ele **não** sobe o Next.js nem a API Nest. Com o container rodando, abra um terminal na **raiz** do projeto e deixe ligado:
+
+```bash
+npm run dev
+```
+
+- **Site:** [http://localhost:3002](http://localhost:3002) (porta **3002**, não 3000)
+- **API:** [http://localhost:3333/api](http://localhost:3333/api)
+
+Se fechar esse terminal ou der `Ctrl+C`, o site some. Para só o banco: `npm run db:up`; para app completo em dev: **`npm run db:up`** + **`npm run dev`**.
+
+### 0. Banco PostgreSQL (obrigatório)
+
+O backend **não inicia** sem um Postgres acessível (`PrismaClientInitializationError` / `P1001` se estiver errado).
+
+**Com Docker (recomendado)** — na raiz do projeto:
+
+```bash
+docker compose up -d
+```
+
+Isso sobe Postgres em **`localhost:5433`** (usuário/senha/db: `postgres` / `postgres` / `imobflow`).
+
+No `backend/.env`, use exatamente (igual ao [`.env.example`](.env.example)):
+
+```env
+DATABASE_URL="postgresql://postgres:postgres@localhost:5433/imobflow?schema=public"
+```
+
+Depois **uma vez** (com o container rodando):
+
+```bash
+cd backend
+npx prisma migrate dev
+npx prisma db seed
+```
+
+**Sem Docker:** use [Supabase](https://supabase.com) e coloque a `DATABASE_URL` completa no `backend/.env`.
+
 ### Opção rápida: API + frontend juntos
 
-Na **raiz** do repositório (pasta `ImobiFlow-Web`):
+Na **raiz** do repositório (pasta `ImobiFlow-Web`), **depois** do banco acima e do `backend/.env` configurado:
 
 ```bash
 npm install
 npm run dev
 ```
 
-Isso sobe o **backend** (porta **3333**) e o **frontend** (porta **3002**) ao mesmo tempo. Sem a API em 3333 o login retorna erro de conexão.
+Atalhos: `npm run db:up` / `npm run db:down` (Docker).
 
-### 1. Banco de dados (Supabase)
+Isso sobe o **backend** (porta **3333**) e o **frontend** (porta **3002**). Se a API cair no startup, veja o terminal: quase sempre é **banco inacessível** ou `DATABASE_URL` com porta errada (**5433** com Docker local, não 5432).
+
+### 1. Banco de dados (Supabase) — alternativa ao Docker
 
 1. Crie uma conta em [Supabase](https://supabase.com)
 2. Crie um novo projeto
@@ -42,7 +85,7 @@ Isso sobe o **backend** (porta **3333**) e o **frontend** (porta **3002**) ao me
 cd backend
 npm install
 cp ../.env.example .env
-# Edite .env com suas variáveis (DATABASE_URL, JWT_SECRET, etc.)
+# Edite .env: DATABASE_URL (5433 se usar docker compose da raiz), JWT_SECRET, etc.
 npx prisma generate
 npx prisma migrate dev --name init
 npx prisma db seed

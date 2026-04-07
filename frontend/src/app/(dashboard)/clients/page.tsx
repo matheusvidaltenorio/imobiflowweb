@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { Sidebar } from '@/components/dashboard/sidebar';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
@@ -17,9 +16,7 @@ export default function ClientsPage() {
   });
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <main className="flex-1 p-8">
+    <main className="p-8">
         <div className="mb-8 flex items-center justify-between">
           <h1 className="text-2xl font-bold">Clientes</h1>
           <Link href="/clients/new">
@@ -54,7 +51,6 @@ export default function ClientsPage() {
         ) : (
           <p className="text-gray-500">Nenhum cliente cadastrado. <Link href="/clients/new" className="text-primary-600 hover:underline">Cadastrar primeiro cliente</Link></p>
         )}
-      </main>
-    </div>
+    </main>
   );
 }

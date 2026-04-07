@@ -5,7 +5,6 @@ import Image from 'next/image';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { formatPrice } from '@/lib/utils';
-import { Sidebar } from '@/components/dashboard/sidebar';
 import { Card } from '@/components/ui/card';
 
 export default function AdminPropertiesPage() {
@@ -18,9 +17,7 @@ export default function AdminPropertiesPage() {
   });
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <main className="flex-1 p-8">
+    <main className="p-8">
         <h1 className="mb-8 text-2xl font-bold">Imóveis (Admin)</h1>
 
         {isLoading ? (
@@ -66,7 +63,6 @@ export default function AdminPropertiesPage() {
         ) : (
           <p className="text-gray-500">Nenhum imóvel.</p>
         )}
-      </main>
-    </div>
+    </main>
   );
 }

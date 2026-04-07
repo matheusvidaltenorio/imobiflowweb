@@ -5,7 +5,6 @@ import Image from 'next/image';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { formatPrice } from '@/lib/utils';
-import { Sidebar } from '@/components/dashboard/sidebar';
 import { Card } from '@/components/ui/card';
 
 // Histórico de interesses = imóveis que o cliente enviou lead ou favoritou
@@ -19,9 +18,7 @@ export default function InterestsPage() {
   });
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <main className="flex-1 p-8">
+    <main className="p-8">
         <h1 className="mb-8 text-2xl font-bold">Meus Interesses</h1>
         <p className="mb-6 text-gray-600">
           Imóveis que você favoritou ou demonstrou interesse.
@@ -67,7 +64,6 @@ export default function InterestsPage() {
             de interesse!
           </p>
         )}
-      </main>
-    </div>
+    </main>
   );
 }

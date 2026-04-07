@@ -3,6 +3,8 @@
   "private": true,
   "description": "ImobiFlow — subir API + frontend com um comando",
   "scripts": {
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
     "dev": "concurrently -n api,web -c blue,green \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\"",
     "dev:backend": "npm run dev --prefix backend",
     "dev:frontend": "npm run dev --prefix frontend"

@@ -5,7 +5,6 @@ import Image from 'next/image';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { formatPrice } from '@/lib/utils';
-import { Sidebar } from '@/components/dashboard/sidebar';
 import { Card } from '@/components/ui/card';
 
 export default function FavoritesPage() {
@@ -18,9 +17,7 @@ export default function FavoritesPage() {
   });
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <main className="flex-1 p-8">
+    <main className="p-8">
         <h1 className="mb-8 text-2xl font-bold">Meus Favoritos</h1>
 
         {isLoading ? (
@@ -60,7 +57,6 @@ export default function FavoritesPage() {
         ) : (
           <p className="text-gray-500">Você ainda não tem favoritos. Explore os imóveis e adicione aos favoritos!</p>
         )}
-      </main>
-    </div>
+    </main>
   );
 }

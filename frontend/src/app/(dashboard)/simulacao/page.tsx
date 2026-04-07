@@ -9,7 +9,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { MessageCircle, Loader2, Star, Landmark, FileText } from 'lucide-react';
 import { api } from '@/lib/api';
 import { getBankAccent, getBankLogoUrl } from '@/utils/bankLogos';
-import { Sidebar } from '@/components/dashboard/sidebar';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -321,9 +320,7 @@ export default function SimulacaoPage() {
   };
 
   return (
-    <div className="flex min-h-screen bg-surface">
-      <Sidebar />
-      <main className="flex-1 overflow-auto p-6 md:p-8">
+    <main className="p-6 md:p-8">
         <div className="mx-auto max-w-5xl">
           <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-accent-500/10 px-3 py-1 text-xs font-bold uppercase tracking-wide text-accent-700 ring-1 ring-accent-500/20">
             Fechamento
@@ -780,7 +777,6 @@ export default function SimulacaoPage() {
             </div>
           )}
         </div>
-      </main>
-    </div>
+    </main>
   );
 }

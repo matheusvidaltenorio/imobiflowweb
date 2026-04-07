@@ -18,7 +18,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { MessageCircle, Calendar, XCircle } from 'lucide-react';
 import { api } from '@/lib/api';
 import { cn, formatDate, formatPrice } from '@/lib/utils';
-import { Sidebar } from '@/components/dashboard/sidebar';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toaster';
@@ -304,9 +303,7 @@ export default function LeadsPage() {
   }
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <main className="flex-1 overflow-hidden bg-surface p-6 md:p-10">
+    <main className="overflow-hidden bg-surface p-6 md:p-10">
         <div className="mb-8">
           <h1 className="text-3xl font-bold tracking-tight text-primary-950">Funil de leads</h1>
           <p className="mt-2 max-w-2xl text-gray-600">
@@ -375,7 +372,6 @@ export default function LeadsPage() {
             }}
           />
         )}
-      </main>
-    </div>
+    </main>
   );
 }

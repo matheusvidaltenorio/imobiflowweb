@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { Sidebar } from '@/components/dashboard/sidebar';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toaster';
@@ -29,9 +28,7 @@ export default function DevelopmentsPage() {
   });
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <main className="flex-1 p-8">
+    <main className="p-8">
         <div className="mb-8 flex items-center justify-between">
           <h1 className="text-2xl font-bold">Loteamentos</h1>
           <Link href="/developments/new">
@@ -72,7 +69,6 @@ export default function DevelopmentsPage() {
         ) : (
           <p className="text-gray-500">Nenhum loteamento cadastrado. <Link href="/developments/new" className="text-primary-600 hover:underline">Criar primeiro</Link></p>
         )}
-      </main>
-    </div>
+    </main>
   );
 }

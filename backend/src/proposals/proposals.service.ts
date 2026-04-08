@@ -7,13 +7,17 @@ import {
 import { ProposalStatus, UserRole } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../prisma/prisma.service';
+import { ClosingPredictionService } from '../closing-prediction/closing-prediction.service';
 import { CreateProposalDto } from './dto/create-proposal.dto';
 import { UpdateProposalLinksDto } from './dto/update-proposal-links.dto';
 import { sanitizeInput } from '../common/utils/xss.util';
 
 @Injectable()
 export class ProposalsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private closing: ClosingPredictionService,
+  ) {}
 
   async create(userId: string, role: UserRole, dto: CreateProposalDto) {
     if (dto.clientId) {
@@ -32,7 +36,7 @@ export class ProposalsService {
       }
     }
 
-    return this.prisma.proposal.create({
+    const created = await this.prisma.proposal.create({
       data: {
         userId,
         clientId: dto.clientId ?? null,
@@ -50,6 +54,8 @@ export class ProposalsService {
         sale: { select: { id: true, status: true } },
       },
     });
+    await this.closing.recalculateForClientLeads(dto.clientId ?? undefined);
+    return created;
   }
 
   async findAllForUser(userId: string, isAdmin: boolean) {

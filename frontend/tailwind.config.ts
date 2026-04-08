@@ -38,6 +38,22 @@ const config: Config = {
           600: '#16a34a',
           700: '#15803d',
         },
+        warning: {
+          50: '#fffbeb',
+          100: '#fef3c7',
+          200: '#fde68a',
+          500: '#f59e0b',
+          600: '#d97706',
+          700: '#b45309',
+        },
+        danger: {
+          50: '#fef2f2',
+          100: '#fee2e2',
+          200: '#fecaca',
+          500: '#ef4444',
+          600: '#dc2626',
+          700: '#b91c1c',
+        },
         surface: {
           DEFAULT: '#F7F9FC',
           muted: '#E5E7EB',

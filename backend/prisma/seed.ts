@@ -1,5 +1,9 @@
 import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import {
+  backfillDevelopmentSlugs,
+  seedDevelopmentsCatalog,
+} from './seeds/run-developments-catalog';
 
 const prisma = new PrismaClient();
 
@@ -66,12 +70,17 @@ async function main() {
     development = await prisma.development.create({
       data: {
         name: 'Residencial Vista Verde',
+        slug: 'residencial-vista-verde',
         description: 'Loteamento premium com área de lazer',
         city: 'São Paulo',
+        state: 'SP',
         neighborhood: 'Vila Mariana',
       },
     });
   }
+
+  await seedDevelopmentsCatalog(prisma);
+  await backfillDevelopmentSlugs(prisma);
 
   let block = await prisma.block.findFirst({
     where: { developmentId: development.id, name: 'Quadra A' },
@@ -137,10 +146,12 @@ async function main() {
     },
   });
 
-  console.log('Seed executado com sucesso!');
-  console.log('Admin:', admin.email, '/ admin123');
-  console.log('Corretor:', broker.email, '/ corretor123');
-  console.log('Cliente:', client.email, '/ cliente123');
+  console.log('Seed executado com sucesso.');
+  console.log('Usuários de desenvolvimento (e-mails):');
+  console.log(`  • Admin:    ${admin.email}`);
+  console.log(`  • Corretor: ${broker.email}`);
+  console.log(`  • Cliente:  ${client.email}`);
+  console.log('Senhas padrão: documentadas no README — use apenas em ambiente local.');
 }
 
 main()

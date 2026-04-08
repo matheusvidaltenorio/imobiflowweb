@@ -7,6 +7,7 @@ import {
 import { UserRole } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../prisma/prisma.service';
+import { ClosingPredictionService } from '../closing-prediction/closing-prediction.service';
 import { CompareSimulationDto } from './dto/compare-simulation.dto';
 import { sanitizeInput } from '../common/utils/xss.util';
 
@@ -59,7 +60,10 @@ function buildAllowedTerms(age: number | undefined): { terms: number[]; ageLimit
 
 @Injectable()
 export class SimulationsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private closing: ClosingPredictionService,
+  ) {}
 
   /** PRICE: PMT = PV * (i * (1+i)^n) / ((1+i)^n - 1) */
   pricePmt(pv: number, monthlyRate: number, n: number): number {
@@ -197,6 +201,7 @@ export class SimulationsService {
           propertyId: dto.propertyId ?? null,
         },
       });
+      await this.closing.recalculateForClientLeads(dto.clientId ?? undefined);
     }
 
     return {

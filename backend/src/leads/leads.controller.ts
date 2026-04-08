@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Param, Body, UseGuards, Req } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Param, Body, Query, UseGuards, Req } from '@nestjs/common';
 import { LeadsService } from './leads.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -14,7 +14,17 @@ export class LeadsController {
   @Public()
   @Post()
   create(
-    @Body() dto: { propertyId: string; name: string; email: string; phone?: string; message?: string; source?: string },
+    @Body()
+    dto: {
+      propertyId?: string;
+      lotId?: string;
+      name: string;
+      email: string;
+      phone?: string;
+      message?: string;
+      source?: string;
+      leadSource?: string;
+    },
     @Req() req: { user?: { id: string }; ip?: string },
   ) {
     return this.leads.create(
@@ -26,11 +36,37 @@ export class LeadsController {
     );
   }
 
+  @Public()
+  @Post(':id/touch')
+  touch(@Param('id') id: string, @Req() req: { ip?: string }) {
+    return this.leads.recordPublicTouch(id, req.ip);
+  }
+
   @Get()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.CORRETOR, UserRole.ADMIN)
-  findAll(@CurrentUser('id') userId: string, @CurrentUser('role') role: UserRole) {
-    return this.leads.findAllByUser(userId, role);
+  findAll(
+    @CurrentUser('id') userId: string,
+    @CurrentUser('role') role: UserRole,
+    @Query('sort') sort?: string,
+  ) {
+    const s =
+      sort === 'closing' || sort === 'risk' || sort === 'recent'
+        ? sort
+        : undefined;
+    return this.leads.findAllByUser(userId, role, s);
+  }
+
+  @Post(':id/interactions')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.CORRETOR, UserRole.ADMIN)
+  addInteraction(
+    @Param('id') id: string,
+    @CurrentUser('id') userId: string,
+    @CurrentUser('role') role: UserRole,
+    @Body() body: { type: string; notes?: string },
+  ) {
+    return this.leads.addInteraction(id, userId, role, body);
   }
 
   @Get(':id')

@@ -1,0 +1,22 @@
+-- CreateEnum
+CREATE TYPE "LotGeoStatus" AS ENUM ('SEM_LOCALIZACAO', 'APROXIMADO', 'EXATO');
+
+-- AlterTable Development
+ALTER TABLE "Development" ADD COLUMN IF NOT EXISTS "zipCode" TEXT;
+ALTER TABLE "Development" ADD COLUMN IF NOT EXISTS "latitude" DECIMAL(10,7);
+ALTER TABLE "Development" ADD COLUMN IF NOT EXISTS "longitude" DECIMAL(10,7);
+ALTER TABLE "Development" ADD COLUMN IF NOT EXISTS "placeId" TEXT;
+ALTER TABLE "Development" ADD COLUMN IF NOT EXISTS "polygonCoordinates" JSONB;
+
+CREATE INDEX IF NOT EXISTS "Development_city_idx" ON "Development"("city");
+
+-- AlterTable Lot
+ALTER TABLE "Lot" ADD COLUMN IF NOT EXISTS "latitude" DECIMAL(10,7);
+ALTER TABLE "Lot" ADD COLUMN IF NOT EXISTS "longitude" DECIMAL(10,7);
+ALTER TABLE "Lot" ADD COLUMN IF NOT EXISTS "polygonCoordinates" JSONB;
+ALTER TABLE "Lot" ADD COLUMN IF NOT EXISTS "mapLabel" TEXT;
+ALTER TABLE "Lot" ADD COLUMN IF NOT EXISTS "referencePoint" TEXT;
+ALTER TABLE "Lot" ADD COLUMN IF NOT EXISTS "streetFront" TEXT;
+ALTER TABLE "Lot" ADD COLUMN IF NOT EXISTS "geoStatus" "LotGeoStatus" NOT NULL DEFAULT 'SEM_LOCALIZACAO';
+
+CREATE INDEX IF NOT EXISTS "Lot_geoStatus_idx" ON "Lot"("geoStatus");

@@ -1,7 +1,8 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { ScheduleModule } from '@nestjs/schedule';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
@@ -21,25 +22,28 @@ import { ProposalsModule } from './proposals/proposals.module';
 import { ContractsModule } from './contracts/contracts.module';
 import { SalesModule } from './sales/sales.module';
 import { CloudinaryModule } from './cloudinary/cloudinary.module';
+import { LotScoringModule } from './lot-scoring/lot-scoring.module';
+import { CommercialAssistantModule } from './commercial-assistant/commercial-assistant.module';
+import { ClosingPredictionModule } from './closing-prediction/closing-prediction.module';
+import { MapsModule } from './maps/maps.module';
+import { InstagramAdsModule } from './instagram-ads/instagram-ads.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    ScheduleModule.forRoot(),
     ThrottlerModule.forRoot([
-      {
-        name: 'short',
-        ttl: 60000,
-        limit: 100,
-      },
-      {
-        name: 'login',
-        ttl: 60000,
-        limit: 5,
-      },
+      { ttl: 1000, limit: 25 },
+      { ttl: 60000, limit: 800 },
     ]),
     PrismaModule,
+    LotScoringModule,
+    CommercialAssistantModule,
+    ClosingPredictionModule,
+    MapsModule,
+    InstagramAdsModule,
     CloudinaryModule,
     AuthModule,
     UsersModule,
@@ -62,6 +66,7 @@ import { RolesGuard } from './common/guards/roles.guard';
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
   ],
 })
 export class AppModule {}

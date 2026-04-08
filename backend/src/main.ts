@@ -1,7 +1,10 @@
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { ValidationPipe } from '@nestjs/common';
 import helmet from 'helmet';
+import { join } from 'path';
 import { AppModule } from './app.module';
+import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
 /** Em dev, Next.js pode usar 3000, 3001, 3002… — evita CORS ao trocar de porta. */
 const LOCALHOST_DEV_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i;
@@ -12,9 +15,20 @@ function productionAllowedOrigins(): string[] {
 }
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
-  app.use(helmet());
+  const uploadsRoot = join(__dirname, '..', 'uploads');
+  app.useStaticAssets(uploadsRoot, {
+    prefix: '/uploads/',
+    index: false,
+  });
+
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+    }),
+  );
+  app.useGlobalFilters(new AllExceptionsFilter());
 
   const isProduction = process.env.NODE_ENV === 'production';
   const prodOrigins = productionAllowedOrigins();

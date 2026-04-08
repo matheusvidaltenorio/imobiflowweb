@@ -19,11 +19,7 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>;
 
-function buildWhatsAppConfirmation(
-  clientName: string,
-  propertyTitle: string,
-  scheduledAt: string
-): string {
+function buildWhatsAppConfirmation(clientName: string, itemLabel: string, scheduledAt: string): string {
   const date = new Date(scheduledAt);
   const dateStr = date.toLocaleDateString('pt-BR', {
     weekday: 'long',
@@ -35,25 +31,47 @@ function buildWhatsAppConfirmation(
     hour: '2-digit',
     minute: '2-digit',
   });
-  return `Olá ${clientName}! Confirmando a visita ao imóvel *${propertyTitle}* agendada para ${dateStr} às ${timeStr}. Qualquer dúvida, estou à disposição!`;
+  return `Olá ${clientName}! Confirmando a visita ao *${itemLabel}* agendada para ${dateStr} às ${timeStr}. Qualquer dúvida, estou à disposição!`;
+}
+
+export type ScheduleVisitLead = {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  property?: { id: string; title: string };
+  lot?: {
+    id: string;
+    number: string;
+    block?: { name?: string; development?: { name?: string } };
+  };
+};
+
+function visitSubjectLabel(lead: ScheduleVisitLead): string {
+  if (lead.lot) {
+    const dev = lead.lot.block?.development?.name ?? 'Loteamento';
+    const quadra = lead.lot.block?.name ?? 'Quadra';
+    return `Lote ${lead.lot.number} — ${quadra} (${dev})`;
+  }
+  if (lead.property) return lead.property.title;
+  return 'Imóvel';
 }
 
 type ScheduleVisitModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  lead: {
-    id: string;
-    name: string;
-    email: string;
-    phone?: string;
-    property: { id: string; title: string };
-  };
+  lead: ScheduleVisitLead;
 };
 
 export function ScheduleVisitModal({ open, onOpenChange, lead }: ScheduleVisitModalProps) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const [visitCreated, setVisitCreated] = useState<{ phone?: string; clientName: string; propertyTitle: string; scheduledAt: string } | null>(null);
+  const [visitCreated, setVisitCreated] = useState<{
+    phone?: string;
+    clientName: string;
+    itemLabel: string;
+    scheduledAt: string;
+  } | null>(null);
 
   const defaultDate = (() => {
     const d = new Date();
@@ -67,14 +85,28 @@ export function ScheduleVisitModal({ open, onOpenChange, lead }: ScheduleVisitMo
     defaultValues: { scheduledAt: defaultDate },
   });
 
+  const itemLabel = visitSubjectLabel(lead);
+
   const create = useMutation({
-    mutationFn: (d: FormData) =>
-      api.post('/visits', {
-        propertyId: lead.property.id,
-        leadId: lead.id,
-        scheduledAt: d.scheduledAt,
-        notes: d.notes || undefined,
-      }),
+    mutationFn: (d: FormData) => {
+      if (lead.lot?.id) {
+        return api.post('/visits', {
+          lotId: lead.lot.id,
+          leadId: lead.id,
+          scheduledAt: d.scheduledAt,
+          notes: d.notes || undefined,
+        });
+      }
+      if (lead.property?.id) {
+        return api.post('/visits', {
+          propertyId: lead.property.id,
+          leadId: lead.id,
+          scheduledAt: d.scheduledAt,
+          notes: d.notes || undefined,
+        });
+      }
+      return Promise.reject(new Error('Lead sem imóvel ou lote vinculado'));
+    },
     onSuccess: (res, variables) => {
       const data = res?.data as { lead?: { phone?: string }; client?: { phone?: string } };
       const phone = (data?.lead?.phone || data?.client?.phone || lead.phone || '').replace(/\D/g, '');
@@ -84,12 +116,12 @@ export function ScheduleVisitModal({ open, onOpenChange, lead }: ScheduleVisitMo
       const payload = {
         phone: phone.length >= 10 ? phone : undefined,
         clientName: lead.name,
-        propertyTitle: lead.property.title,
+        itemLabel,
         scheduledAt: variables.scheduledAt,
       };
       setVisitCreated(payload);
       if (payload.phone) {
-        const msg = buildWhatsAppConfirmation(payload.clientName, payload.propertyTitle, payload.scheduledAt);
+        const msg = buildWhatsAppConfirmation(payload.clientName, payload.itemLabel, payload.scheduledAt);
         window.open(`https://wa.me/55${payload.phone}?text=${encodeURIComponent(msg)}`, '_blank', 'noopener,noreferrer');
       }
       setTimeout(() => {
@@ -110,15 +142,20 @@ export function ScheduleVisitModal({ open, onOpenChange, lead }: ScheduleVisitMo
     onOpenChange(false);
   };
 
+  const canSchedule = !!(lead.lot?.id || lead.property?.id);
+
   return (
-    <Dialog open={open} onOpenChange={(open) => !open && handleClose()}>
+    <Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Agendar visita</DialogTitle>
         </DialogHeader>
         <p className="text-sm text-gray-600">
-          Lead: <strong>{lead.name}</strong> • {lead.property.title}
+          Lead: <strong>{lead.name}</strong> • {itemLabel}
         </p>
+        {!canSchedule ? (
+          <p className="text-sm text-amber-800">Associe este lead a um lote ou imóvel para agendar visita.</p>
+        ) : null}
         <form onSubmit={handleSubmit((d) => create.mutate(d))} className="space-y-4">
           <div>
             <Label>Data e hora</Label>
@@ -126,10 +163,14 @@ export function ScheduleVisitModal({ open, onOpenChange, lead }: ScheduleVisitMo
           </div>
           <div>
             <Label>Observações</Label>
-            <textarea {...register('notes')} className="flex min-h-[60px] w-full rounded-lg border px-3 py-2 text-sm" placeholder="Opcional" />
+            <textarea
+              {...register('notes')}
+              className="flex min-h-[60px] w-full rounded-lg border px-3 py-2 text-sm"
+              placeholder="Opcional"
+            />
           </div>
           <div className="flex gap-2">
-            <Button type="submit" disabled={create.isPending}>
+            <Button type="submit" disabled={create.isPending || !canSchedule}>
               {create.isPending ? 'Agendando...' : 'Agendar e enviar WhatsApp'}
             </Button>
             <Button type="button" variant="outline" onClick={handleClose}>

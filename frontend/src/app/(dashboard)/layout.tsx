@@ -2,13 +2,14 @@
 
 import { useAuth } from '@/lib/auth-context';
 import { useRouter, usePathname } from 'next/navigation';
-import { useEffect } from 'react';
-import { Sidebar } from '@/components/dashboard/sidebar';
+import { useEffect, useState } from 'react';
+import { MobileNavBar, Sidebar } from '@/components/dashboard/sidebar';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   useEffect(() => {
     if (loading) return;
@@ -54,8 +55,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex h-[100dvh] min-h-0 w-full overflow-hidden bg-surface">
-      <Sidebar />
-      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">{children}</div>
+      <Sidebar mobileOpen={mobileNavOpen} onMobileClose={() => setMobileNavOpen(false)} />
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <MobileNavBar onOpen={() => setMobileNavOpen(true)} />
+        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">{children}</div>
+      </div>
     </div>
   );
 }

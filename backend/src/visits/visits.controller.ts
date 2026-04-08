@@ -30,9 +30,18 @@ export class VisitsController {
   @Roles(UserRole.CORRETOR, UserRole.ADMIN)
   create(
     @CurrentUser('id') userId: string,
-    @Body() dto: { propertyId: string; clientId?: string; leadId?: string; scheduledAt: string; notes?: string },
+    @CurrentUser('role') role: UserRole,
+    @Body()
+    dto: {
+      propertyId?: string;
+      lotId?: string;
+      clientId?: string;
+      leadId?: string;
+      scheduledAt: string;
+      notes?: string;
+    },
   ) {
-    return this.visits.create(userId, { ...dto, scheduledAt: new Date(dto.scheduledAt) });
+    return this.visits.create(userId, role, { ...dto, scheduledAt: new Date(dto.scheduledAt) });
   }
 
   @Patch(':id')

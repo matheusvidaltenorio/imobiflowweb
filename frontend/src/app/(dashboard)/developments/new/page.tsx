@@ -18,19 +18,44 @@ const schema = z.object({
   description: z.string().optional(),
   address: z.string().optional(),
   city: z.string().min(2),
+  state: z.string().max(2).optional().or(z.literal('')),
   neighborhood: z.string().optional(),
+  zipCode: z.string().optional(),
+  latitude: z.string().optional(),
+  longitude: z.string().optional(),
 });
 
-type FormData = z.infer<typeof schema>;
+type FormValues = z.infer<typeof schema>;
 
 export default function NewDevelopmentPage() {
   const router = useRouter();
   const { toast } = useToast();
 
-  const { register, handleSubmit } = useForm<FormData>({ resolver: zodResolver(schema) });
+  const { register, handleSubmit } = useForm<FormValues>({ resolver: zodResolver(schema) });
 
   const create = useMutation({
-    mutationFn: (d: FormData) => api.post('/developments', d),
+    mutationFn: (d: FormValues) => {
+      const lt = d.latitude?.trim();
+      const lg = d.longitude?.trim();
+      let latitude: number | undefined;
+      let longitude: number | undefined;
+      if (lt && lg) {
+        latitude = parseFloat(lt.replace(',', '.'));
+        longitude = parseFloat(lg.replace(',', '.'));
+      }
+      return api.post('/developments', {
+        name: d.name,
+        description: d.description?.trim() || undefined,
+        address: d.address?.trim() || undefined,
+        city: d.city,
+        state: d.state?.trim() || undefined,
+        neighborhood: d.neighborhood?.trim() || undefined,
+        zipCode: d.zipCode?.trim() || undefined,
+        ...(latitude != null && longitude != null && Number.isFinite(latitude) && Number.isFinite(longitude)
+          ? { latitude, longitude }
+          : {}),
+      });
+    },
     onSuccess: (res) => {
       const id = (res as { data?: { id?: string } })?.data?.id;
       toast({ title: 'Loteamento criado!', type: 'success' });
@@ -67,8 +92,26 @@ export default function NewDevelopmentPage() {
               <Input {...register('city')} />
             </div>
             <div>
+              <Label>UF</Label>
+              <Input {...register('state')} placeholder="SP" maxLength={2} className="uppercase" />
+            </div>
+            <div>
               <Label>Bairro</Label>
               <Input {...register('neighborhood')} />
+            </div>
+            <div>
+              <Label>CEP (opcional)</Label>
+              <Input {...register('zipCode')} />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <Label>Latitude (opcional)</Label>
+                <Input {...register('latitude')} placeholder="-7.12" />
+              </div>
+              <div>
+                <Label>Longitude (opcional)</Label>
+                <Input {...register('longitude')} placeholder="-39.12" />
+              </div>
             </div>
             <Button type="submit" disabled={create.isPending}>
               {create.isPending ? 'Salvando...' : 'Criar'}

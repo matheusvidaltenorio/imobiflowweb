@@ -26,4 +26,9 @@ export class SimulationsController {
   ) {
     return this.simulations.compare(userId, role, dto);
   }
+
+  @Get('mine')
+  listMine(@CurrentUser('id') userId: string) {
+    return this.simulations.listMine(userId);
+  }
 }

@@ -4,14 +4,25 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { UserRole } from '@prisma/client';
+import { Prisma, UserRole } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../prisma/prisma.service';
 import { ClosingPredictionService } from '../closing-prediction/closing-prediction.service';
 import { CompareSimulationDto } from './dto/compare-simulation.dto';
 import { sanitizeInput } from '../common/utils/xss.util';
+import {
+  adjustMonthlyRate,
+  approximateCetAnnualPercent,
+  effectiveAnnualPercent,
+  nominalAnnualPercentLinear,
+  priceSummary,
+  sacSummary,
+  type MortgageIndexer,
+  type MortgageProductLine,
+} from './mortgage-calculator';
 
-const TERMS_MONTHS = [120, 180, 240, 360] as const;
+const TERMS_MONTHS = [120, 180, 240, 300, 360, 420] as const;
+const MAX_FINANCING_TERM_MONTHS = 420;
 
 export type SimulationOptionRow = {
   bankId: string;
@@ -44,7 +55,7 @@ function buildAllowedTerms(age: number | undefined): { terms: number[]; ageLimit
   const isFullStandardSet =
     terms.length === TERMS_MONTHS.length && TERMS_MONTHS.every((t) => terms.includes(t));
   if (terms.length === 0) {
-    const capped = Math.min(maxMonths, 360);
+    const capped = Math.min(maxMonths, MAX_FINANCING_TERM_MONTHS);
     const rounded = Math.floor(capped / 12) * 12;
     if (rounded < 12) {
       throw new BadRequestException('Nenhum prazo compatível com o limite de 80 anos ao final do financiamento');
@@ -92,6 +103,15 @@ export class SimulationsService {
     const downPayment = dto.downPayment;
     const grossFinanced = propertyValue - downPayment;
 
+    if (dto.enforceMinDownPercent === true) {
+      const minDown = this.round2(propertyValue * 0.1);
+      if (downPayment + 1e-6 < minDown) {
+        throw new BadRequestException(
+          `Entrada mínima de 10% do valor do lote/imóvel: ${minDown.toFixed(2)} (LTV máximo 90%)`,
+        );
+      }
+    }
+
     if (downPayment >= propertyValue) {
       throw new BadRequestException('A entrada deve ser menor que o valor do imóvel');
     }
@@ -110,7 +130,23 @@ export class SimulationsService {
     const incomeLimitPct = depCount >= 3 ? 0.25 : 0.3;
     const maxInstallment = income * incomeLimitPct;
 
-    const { terms: allowedTerms, ageLimited } = buildAllowedTerms(dto.age);
+    const { terms: baseAllowedTerms, ageLimited } = buildAllowedTerms(dto.age);
+    let allowedTerms = [...baseAllowedTerms];
+
+    if (dto.chosenTermMonths != null) {
+      const n = dto.chosenTermMonths;
+      const maxByAge =
+        dto.age != null ? Math.floor((80 - dto.age) * 12) : MAX_FINANCING_TERM_MONTHS;
+      if (n < 12 || n > MAX_FINANCING_TERM_MONTHS) {
+        throw new BadRequestException('Prazo deve estar entre 12 e 420 meses');
+      }
+      if (n > maxByAge) {
+        throw new BadRequestException(
+          `Prazo acima do limite pela idade (máx. ${maxByAge} meses respeitando 80 anos ao final)`,
+        );
+      }
+      allowedTerms = [n];
+    }
 
     const warnings: SimulationCompareWarnings = {
       ageReducedTerms: ageLimited,
@@ -132,6 +168,11 @@ export class SimulationsService {
       if (role !== UserRole.ADMIN && property.userId !== userId) {
         throw new ForbiddenException('Sem permissão para este imóvel');
       }
+    }
+
+    if (dto.lotId) {
+      const lot = await this.prisma.lot.findUnique({ where: { id: dto.lotId } });
+      if (!lot) throw new NotFoundException('Lote não encontrado');
     }
 
     const banks = await this.prisma.bank.findMany({ orderBy: { name: 'asc' } });
@@ -199,9 +240,61 @@ export class SimulationsService {
           fgtsAmount: new Decimal(fgtsAmt),
           clientId: dto.clientId ?? null,
           propertyId: dto.propertyId ?? null,
+          lotId: dto.lotId ?? null,
+          metadata:
+            dto.metadata === undefined ? undefined : (dto.metadata as Prisma.InputJsonValue),
         },
       });
       await this.closing.recalculateForClientLeads(dto.clientId ?? undefined);
+    }
+
+    const indexer: MortgageIndexer = dto.indexer ?? 'TR';
+    const productLine: MortgageProductLine = dto.productLine ?? 'SBPE';
+    const analysisMonths =
+      dto.chosenTermMonths ??
+      (allowedTerms.length ? Math.max(...allowedTerms) : 360);
+
+    let mortgageAnalysis: Record<string, unknown> | undefined;
+    if (dto.includeMortgageAnalysis === true && banks.length) {
+      const lowestMonthly = Math.min(...banks.map((b) => Number(b.monthlyRate)));
+      const adjustedMonthly = adjustMonthlyRate(lowestMonthly, indexer, productLine);
+      const sac = sacSummary(principal, adjustedMonthly, analysisMonths);
+      const price = priceSummary(principal, adjustedMonthly, analysisMonths);
+      const maxInstallment = income * incomeLimitPct;
+      mortgageAnalysis = {
+        benchmarkBankMonthlyRate: lowestMonthly,
+        adjustedMonthlyRate: adjustedMonthly,
+        nominalAnnualPercent: nominalAnnualPercentLinear(adjustedMonthly),
+        effectiveAnnualPercent: effectiveAnnualPercent(adjustedMonthly),
+        cetApproxAnnualPercent: approximateCetAnnualPercent(adjustedMonthly),
+        indexer,
+        productLine,
+        analysisMonths,
+        principal,
+        propertyValue,
+        downPayment,
+        maxLtvPercent: 90,
+        maxTermMonths: MAX_FINANCING_TERM_MONTHS,
+        incomeCommitmentMaxPercent: incomeLimitPct * 100,
+        maxInstallmentAllowed: this.round2(maxInstallment),
+        sac: {
+          firstInstallment: sac.firstInstallment,
+          lastInstallment: sac.lastInstallment,
+          averageInstallment: sac.averageInstallment,
+          totalPaid: sac.totalPaid,
+          totalInterest: sac.totalInterest,
+          amortizationFixed: sac.amortizationFixed,
+          approved: sac.firstInstallment <= maxInstallment + 1e-6,
+        },
+        price: {
+          installment: price.installment,
+          firstInstallment: price.firstInstallment,
+          lastInstallment: price.lastInstallment,
+          totalPaid: price.totalPaid,
+          totalInterest: price.totalInterest,
+          approved: price.installment <= maxInstallment + 1e-6,
+        },
+      };
     }
 
     return {
@@ -214,6 +307,26 @@ export class SimulationsService {
       bestKey,
       bestOption,
       byBank,
+      mortgageAnalysis,
     };
+  }
+
+  async listMine(userId: string) {
+    return this.prisma.simulation.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      include: {
+        client: { select: { id: true, name: true } },
+        property: { select: { id: true, title: true } },
+        lot: {
+          select: {
+            id: true,
+            number: true,
+            block: { select: { name: true, development: { select: { id: true, name: true, city: true } } } },
+          },
+        },
+      },
+    });
   }
 }

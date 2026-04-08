@@ -284,6 +284,7 @@ model Lot {
   visits      Visit[]
   aiMessageSuggestions AiMessageSuggestion[]
   instagramAdSuggestions InstagramAdSuggestion[]
+  simulations            Simulation[]
 
   @@index([blockId])
   @@index([status])
@@ -573,14 +574,18 @@ model Simulation {
   fgtsAmount     Decimal  @default(0) @db.Decimal(14, 2)
   clientId       String?
   propertyId     String?
+  lotId          String?
+  metadata       Json?
   createdAt      DateTime @default(now())
 
   user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   client   Client?   @relation(fields: [clientId], references: [id], onDelete: SetNull)
   property Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  lot      Lot?      @relation(fields: [lotId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([createdAt])
+  @@index([lotId])
 }
 
 model Contract {

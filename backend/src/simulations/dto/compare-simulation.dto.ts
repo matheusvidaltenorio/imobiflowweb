@@ -4,6 +4,7 @@ import {
   IsIn,
   IsInt,
   IsNumber,
+  IsObject,
   IsOptional,
   IsString,
   Max,
@@ -84,4 +85,40 @@ export class CompareSimulationDto {
   @IsNumber()
   @Min(0)
   fgtsAmount?: number;
+
+  /** Quando true, exige entrada ≥ 10% do valor do imóvel (LTV máx. 90%). */
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true')
+  @IsBoolean()
+  enforceMinDownPercent?: boolean;
+
+  @Transform(emptyToUndefined)
+  @IsOptional()
+  @IsString()
+  lotId?: string;
+
+  /** Prazo único da simulação (12–420). Quando informado, a comparação por banco usa só este prazo. */
+  @IsOptional()
+  @IsInt()
+  @Min(12)
+  @Max(420)
+  chosenTermMonths?: number;
+
+  @IsOptional()
+  @IsIn(['TR', 'FIXA'])
+  indexer?: 'TR' | 'FIXA';
+
+  @IsOptional()
+  @IsIn(['SBPE', 'PADRAO'])
+  productLine?: 'SBPE' | 'PADRAO';
+
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true')
+  @IsBoolean()
+  includeMortgageAnalysis?: boolean;
+
+  /** Snapshot do assistente (etapas Caixa) para histórico. */
+  @IsOptional()
+  @IsObject()
+  metadata?: Record<string, unknown>;
 }

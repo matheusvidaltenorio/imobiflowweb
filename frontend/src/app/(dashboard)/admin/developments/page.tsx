@@ -10,6 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/dashboard/page-header';
 import { EmptyState } from '@/components/dashboard/empty-state';
 import { DevelopmentCover } from '@/components/developments/development-cover';
+import { LocationPrecisionBadge, type DevelopmentLocationPrecision } from '@/components/developments/location-precision-badge';
 
 export default function AdminDevelopmentsPage() {
   const { data: developments, isLoading } = useQuery({
@@ -23,6 +24,7 @@ export default function AdminDevelopmentsPage() {
           slug?: string | null;
           coverImage?: string | null;
           coverImageAlt?: string | null;
+          locationPrecision?: DevelopmentLocationPrecision;
           lotsCount?: number;
           _count?: { properties: number; blocks: number };
         }>
@@ -67,7 +69,10 @@ export default function AdminDevelopmentsPage() {
                     <MapPin className="h-5 w-5" strokeWidth={1.75} />
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold text-primary-950">{d.name}</h3>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-lg font-bold text-primary-950">{d.name}</h3>
+                      <LocationPrecisionBadge precision={d.locationPrecision ?? 'PENDENTE'} />
+                    </div>
                     <p className="mt-1 text-sm text-gray-600">
                       {d.city} • {d._count?.blocks ?? 0} quadras •{' '}
                       <span className="inline-flex items-center gap-1 font-medium text-primary-800">

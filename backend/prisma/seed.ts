@@ -4,6 +4,7 @@ import {
   backfillDevelopmentSlugs,
   seedDevelopmentsCatalog,
 } from './seeds/run-developments-catalog';
+import { seedDevelopmentsLocations } from './seeds/developments-locations.seed';
 
 const prisma = new PrismaClient();
 
@@ -81,6 +82,7 @@ async function main() {
 
   await seedDevelopmentsCatalog(prisma);
   await backfillDevelopmentSlugs(prisma);
+  await seedDevelopmentsLocations(prisma);
 
   let block = await prisma.block.findFirst({
     where: { developmentId: development.id, name: 'Quadra A' },

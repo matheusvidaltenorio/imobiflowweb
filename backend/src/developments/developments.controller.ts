@@ -49,10 +49,13 @@ export class DevelopmentsController {
       slug?: string;
       description?: string;
       address?: string;
+      referenceAddress?: string;
       city: string;
       state?: string;
       neighborhood?: string;
       zipCode?: string;
+      locationPrecision?: 'EXATA' | 'APROXIMADA' | 'PENDENTE';
+      locationNotes?: string;
       latitude?: number;
       longitude?: number;
       placeId?: string;
@@ -83,10 +86,13 @@ export class DevelopmentsController {
       name?: string;
       description?: string;
       address?: string;
+      referenceAddress?: string | null;
       city?: string;
       state?: string;
       neighborhood?: string;
       zipCode?: string | null;
+      locationPrecision?: 'EXATA' | 'APROXIMADA' | 'PENDENTE';
+      locationNotes?: string | null;
       latitude?: number | null;
       longitude?: number | null;
       placeId?: string | null;

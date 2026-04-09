@@ -16,6 +16,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/toaster';
 import Link from 'next/link';
 import { DevelopmentLotsMap, type GeoMapDevelopment, type GeoMapLot } from '@/components/maps/development-lots-map';
+import type { DevelopmentLocationPrecision } from '@/components/developments/location-precision-badge';
 import { InstagramAdGenerator } from '@/components/marketing/instagram-ad-generator';
 import { googleDirectionsUrl } from '@/lib/maps/lot-map-styles';
 
@@ -79,8 +80,11 @@ export default function EditLotPage() {
             city?: string;
             state?: string | null;
             address?: string | null;
+            referenceAddress?: string | null;
             neighborhood?: string | null;
             zipCode?: string | null;
+            locationPrecision?: DevelopmentLocationPrecision | null;
+            locationNotes?: string | null;
             latitude?: unknown;
             longitude?: unknown;
             polygonCoordinates?: unknown;
@@ -164,8 +168,11 @@ export default function EditLotPage() {
         city: dev.city ?? '',
         state: dev.state,
         address: dev.address,
+        referenceAddress: dev.referenceAddress,
         neighborhood: dev.neighborhood,
         zipCode: dev.zipCode,
+        locationPrecision: dev.locationPrecision,
+        locationNotes: dev.locationNotes,
         latitude: dev.latitude != null ? Number(dev.latitude as number) : null,
         longitude: dev.longitude != null ? Number(dev.longitude as number) : null,
         polygonCoordinates: dev.polygonCoordinates,
@@ -283,9 +290,12 @@ export default function EditLotPage() {
               <Button type="submit" disabled={update.isPending}>
                 Salvar
               </Button>
-              <Button type="button" variant="outline" asChild>
-                <Link href={`/lots?development=${developmentId}&block=${blockId}`}>Voltar à lista</Link>
-              </Button>
+              <Link
+                href={`/lots?development=${developmentId}&block=${blockId}`}
+                className={buttonVariants({ variant: 'outline' })}
+              >
+                Voltar à lista
+              </Link>
               <Button type="button" variant="destructive" onClick={() => remove.mutate()} disabled={remove.isPending}>
                 Excluir
               </Button>

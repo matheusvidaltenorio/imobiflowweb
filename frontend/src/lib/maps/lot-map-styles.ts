@@ -20,6 +20,14 @@ export function stalledAccent(): { dash: boolean } {
   return { dash: true };
 }
 
-export function googleDirectionsUrl(lat: number, lng: number): string {
+/** Link externo para rota (mapa interno continua MapLibre). */
+export function externalGoogleDirectionsUrl(lat: number, lng: number): string {
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${lat},${lng}`)}`;
 }
+
+export function externalOsmDirectionsUrl(lat: number, lng: number): string {
+  return `https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=%3B${lat}%2C${lng}`;
+}
+
+/** @deprecated use externalGoogleDirectionsUrl — mantido para imports legados */
+export const googleDirectionsUrl = externalGoogleDirectionsUrl;

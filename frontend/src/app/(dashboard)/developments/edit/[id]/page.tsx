@@ -16,16 +16,22 @@ import { useToast } from '@/components/ui/toaster';
 import Link from 'next/link';
 import { DevelopmentLotsMap, type GeoMapDevelopment, type GeoMapLot } from '@/components/maps/development-lots-map';
 import { DevelopmentCover } from '@/components/developments/development-cover';
+import type { DevelopmentLocationPrecision } from '@/components/developments/location-precision-badge';
 import { InstagramAdGenerator } from '@/components/marketing/instagram-ad-generator';
+
+const locationPrecisionEnum = z.enum(['EXATA', 'APROXIMADA', 'PENDENTE']);
 
 const schema = z.object({
   name: z.string().min(2),
   description: z.string().optional(),
   address: z.string().optional(),
+  referenceAddress: z.string().optional(),
   city: z.string().min(2),
   state: z.string().max(2).optional().or(z.literal('')),
   neighborhood: z.string().optional(),
   zipCode: z.string().optional(),
+  locationPrecision: locationPrecisionEnum,
+  locationNotes: z.string().optional(),
   latStr: z.string().optional(),
   lngStr: z.string().optional(),
   placeId: z.string().optional(),
@@ -40,10 +46,13 @@ type DevDto = {
   slug?: string | null;
   description?: string;
   address?: string;
+  referenceAddress?: string | null;
   city: string;
   state?: string | null;
   neighborhood?: string;
   zipCode?: string | null;
+  locationPrecision?: DevelopmentLocationPrecision;
+  locationNotes?: string | null;
   latitude?: unknown;
   longitude?: unknown;
   placeId?: string | null;
@@ -89,10 +98,13 @@ export default function EditDevelopmentPage() {
           name: dev.name,
           description: dev.description ?? '',
           address: dev.address ?? '',
+          referenceAddress: dev.referenceAddress ?? '',
           city: dev.city,
           state: dev.state ?? '',
           neighborhood: dev.neighborhood ?? '',
           zipCode: dev.zipCode ?? '',
+          locationPrecision: dev.locationPrecision ?? 'PENDENTE',
+          locationNotes: dev.locationNotes ?? '',
           latStr:
             dev.latitude != null && dev.latitude !== ''
               ? String(Number(dev.latitude as number))
@@ -128,6 +140,7 @@ export default function EditDevelopmentPage() {
         formattedAddress?: string;
         placeId?: string;
       }>('/maps/geocode', {
+        referenceAddress: getValues('referenceAddress'),
         address: getValues('address'),
         city: getValues('city'),
         state: getValues('state'),
@@ -139,7 +152,7 @@ export default function EditDevelopmentPage() {
       setValue('latStr', String(d.lat));
       setValue('lngStr', String(d.lng));
       if (d.placeId) setValue('placeId', d.placeId);
-      toast({ title: 'Coordenadas preenchidas pelo Google', type: 'success' });
+      toast({ title: 'Coordenadas obtidas (geocoding no servidor)', type: 'success' });
     },
     onError: () => toast({ title: 'Não foi possível geocodificar. Confira o endereço ou a chave no servidor.', type: 'error' }),
   });
@@ -207,10 +220,13 @@ export default function EditDevelopmentPage() {
       name: d.name,
       description: d.description?.trim() || undefined,
       address: d.address?.trim() || undefined,
+      referenceAddress: d.referenceAddress?.trim() || null,
       city: d.city,
       state: d.state?.trim() || undefined,
       neighborhood: d.neighborhood?.trim() || undefined,
       zipCode: d.zipCode?.trim() || null,
+      locationPrecision: d.locationPrecision,
+      locationNotes: d.locationNotes?.trim() || null,
       latitude,
       longitude,
       placeId: d.placeId?.trim() || null,
@@ -252,6 +268,33 @@ export default function EditDevelopmentPage() {
             <Input {...register('address')} />
           </div>
           <div>
+            <Label>Endereço de referência (mapa / geocodificação)</Label>
+            <textarea
+              {...register('referenceAddress')}
+              className="flex min-h-[72px] w-full rounded-lg border px-3 py-2 text-sm"
+              placeholder="Ex.: Rua e ponto de referência ainda sem CEP confirmado"
+            />
+          </div>
+          <div>
+            <Label>Precisão da localização</Label>
+            <select
+              {...register('locationPrecision')}
+              className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+            >
+              <option value="EXATA">EXATA</option>
+              <option value="APROXIMADA">APROXIMADA</option>
+              <option value="PENDENTE">PENDENTE</option>
+            </select>
+          </div>
+          <div>
+            <Label>Observações de localização</Label>
+            <textarea
+              {...register('locationNotes')}
+              className="flex min-h-[72px] w-full rounded-lg border px-3 py-2 text-sm"
+              placeholder="Notas internas sobre dúvidas de endereço ou fontes"
+            />
+          </div>
+          <div>
             <Label>CEP</Label>
             <Input {...register('zipCode')} placeholder="00000-000" />
           </div>
@@ -287,10 +330,11 @@ export default function EditDevelopmentPage() {
               onClick={() => geocode.mutate()}
             >
               {geocode.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              Buscar coordenadas (Google)
+              Buscar coordenadas
             </Button>
             <span className="text-xs text-gray-500">
-              Usa <code className="rounded bg-surface-muted px-1">GOOGLE_MAPS_API_KEY</code> no backend.
+              Geocoding no backend: Google se <code className="rounded bg-surface-muted px-1">GOOGLE_MAPS_API_KEY</code>{' '}
+              estiver definida; senão Nominatim (OSM). Mapas no sistema usam MapLibre.
             </span>
           </div>
           <div>

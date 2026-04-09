@@ -11,12 +11,13 @@ import { UserRole } from '@prisma/client';
 export class MapsController {
   constructor(private readonly geocoding: GeocodingService) {}
 
-  /** Monta endereço a partir de campos e retorna lat/lng + placeId do Google. */
+  /** Geocodifica endereço (Google com API key, ou Nominatim/OSM). Independente do mapa MapLibre no frontend. */
   @Post('geocode')
   @HttpCode(200)
   geocode(
     @Body()
     body: {
+      referenceAddress?: string;
       address?: string;
       city?: string;
       state?: string;
@@ -25,8 +26,9 @@ export class MapsController {
     },
   ) {
     const parts = [
-      body.address,
+      body.referenceAddress,
       body.neighborhood,
+      body.address,
       body.city,
       body.state,
       body.zipCode,

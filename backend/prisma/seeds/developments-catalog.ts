@@ -57,13 +57,6 @@ export const DEVELOPMENTS_CATALOG: DevelopmentCatalogEntry[] = [
     imageFile: 'secasa-barbalha.jpg',
   },
   {
-    name: 'Madre de Deus Residencial',
-    city: 'Barbalha',
-    state: 'CE',
-    description: genericDescription(1),
-    imageFile: 'madre-de-deus-residencial.jpg',
-  },
-  {
     name: 'Vale do Cariri',
     city: 'Juazeiro do Norte',
     state: 'CE',
@@ -127,13 +120,6 @@ export const DEVELOPMENTS_CATALOG: DevelopmentCatalogEntry[] = [
     imageFile: 'lagoa-seca-1-e-2.jpg',
   },
   {
-    name: 'Jardim das Araçás',
-    city: 'Juazeiro do Norte',
-    state: 'CE',
-    description: 'Loteamento com ótima localização e fácil acesso',
-    imageFile: 'jardim-aracas.jpg',
-  },
-  {
     name: 'Conquista Aeroporto',
     city: 'Juazeiro do Norte',
     state: 'CE',
@@ -162,25 +148,11 @@ export const DEVELOPMENTS_CATALOG: DevelopmentCatalogEntry[] = [
     imageFile: 'sol-nascente.jpg',
   },
   {
-    name: 'Matriz do Juá',
-    city: 'Juazeiro do Norte',
-    state: 'CE',
-    description: genericDescription(0),
-    imageFile: 'matriz-do-jua.jpg',
-  },
-  {
     name: 'Jardins dos Ipês',
     city: 'Juazeiro do Norte',
     state: 'CE',
     description: 'Lotes a partir de 200m² com boa localização',
     imageFile: 'jardins-ipes.jpg',
-  },
-  {
-    name: 'Grã Village Juazeiro',
-    city: 'Juazeiro do Norte',
-    state: 'CE',
-    description: genericDescription(1),
-    imageFile: 'gra-village-juazeiro.jpg',
   },
   {
     name: 'Art Residence 4',
@@ -195,20 +167,6 @@ export const DEVELOPMENTS_CATALOG: DevelopmentCatalogEntry[] = [
     state: 'CE',
     description: genericDescription(3),
     imageFile: 'santa-amelia.jpg',
-  },
-  {
-    name: 'Portal dos Municípios',
-    city: 'Juazeiro do Norte',
-    state: 'CE',
-    description: genericDescription(0),
-    imageFile: 'portal-dos-municipios.jpg',
-  },
-  {
-    name: 'Desmembramento João Landim',
-    city: 'Juazeiro do Norte',
-    state: 'CE',
-    description: genericDescription(1),
-    imageFile: 'desmembramento-joao-landim.jpg',
   },
   {
     name: 'Boa Vista',

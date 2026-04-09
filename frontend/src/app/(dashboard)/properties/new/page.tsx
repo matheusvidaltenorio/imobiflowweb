@@ -59,11 +59,6 @@ export default function NewPropertyPage() {
       toast({ title: 'Preencha Cidade e Bairro para buscar localização', type: 'error' });
       return;
     }
-    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-    if (!apiKey) {
-      toast({ title: 'Configure NEXT_PUBLIC_GOOGLE_MAPS_API_KEY para geocodificar', type: 'error' });
-      return;
-    }
     setGeocoding(true);
     try {
       const result = await geocodeAddress({

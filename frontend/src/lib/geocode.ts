@@ -1,7 +1,11 @@
-const GEOCODE_URL = 'https://maps.googleapis.com/maps/api/geocode/json';
+import { api } from '@/lib/api';
 
 export type GeocodeResult = { lat: number; lng: number };
 
+/**
+ * Geocodificação via API ImobiFlow (`POST /maps/geocode`).
+ * O backend usa Google quando `GOOGLE_MAPS_API_KEY` está definida; caso contrário Nominatim (OSM).
+ */
 export async function geocodeAddress(params: {
   street?: string;
   number?: string;
@@ -9,9 +13,6 @@ export async function geocodeAddress(params: {
   city?: string;
   zipCode?: string;
 }): Promise<GeocodeResult | null> {
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-  if (!apiKey) return null;
-
   const parts = [
     params.street,
     params.number,
@@ -22,20 +23,23 @@ export async function geocodeAddress(params: {
 
   if (parts.length < 2) return null;
 
-  const address = parts.join(', ');
-  const url = `${GEOCODE_URL}?address=${encodeURIComponent(address)}&key=${apiKey}`;
-
-  const res = await fetch(url);
-  const data = await res.json();
-
-  if (data.status === 'OK' && data.results?.[0]) {
-    const { lat, lng } = data.results[0].geometry.location;
-    return { lat, lng };
+  try {
+    const { data } = await api.post<{ lat: number; lng: number; formattedAddress?: string }>('/maps/geocode', {
+      address: [params.street, params.number].filter(Boolean).join(', '),
+      neighborhood: params.neighborhood,
+      city: params.city,
+      zipCode: params.zipCode,
+    });
+    if (data?.lat != null && data?.lng != null) {
+      return { lat: Number(data.lat), lng: Number(data.lng) };
+    }
+    return null;
+  } catch {
+    return null;
   }
-
-  return null;
 }
 
+/** Abrir busca no OpenStreetMap (link externo; mapa do sistema é MapLibre). */
 export function buildMapsSearchUrl(params: {
   street?: string;
   number?: string;
@@ -50,7 +54,6 @@ export function buildMapsSearchUrl(params: {
     params.city,
     params.zipCode,
   ].filter(Boolean);
-
   const query = parts.join(', ');
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+  return `https://www.openstreetmap.org/search?query=${encodeURIComponent(query)}`;
 }

@@ -93,6 +93,12 @@ enum LotGeoStatus {
   EXATO
 }
 
+enum DevelopmentLocationPrecision {
+  EXATA
+  APROXIMADA
+  PENDENTE
+}
+
 enum InstagramContentType {
   FEED
   STORY
@@ -220,6 +226,10 @@ model Development {
   state         String?
   neighborhood  String?
   zipCode       String?
+  /// Endereço de referência (exibição / geocodificação futura, ex. Nominatim).
+  referenceAddress String? @map("reference_address") @db.Text
+  locationPrecision DevelopmentLocationPrecision @default(PENDENTE) @map("location_precision")
+  locationNotes String? @map("location_notes") @db.Text
   latitude      Decimal? @db.Decimal(10, 7)
   longitude     Decimal? @db.Decimal(10, 7)
   placeId       String?

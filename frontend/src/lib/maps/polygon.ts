@@ -14,6 +14,11 @@ export function parsePolygonCoordinates(raw: unknown): LatLngPoint[] | null {
   return out;
 }
 
+/** @deprecated nome legado; use toLatLngPath */
 export function toGooglePath(points: LatLngPoint[]): { lat: number; lng: number }[] {
   return points.map((p) => ({ lat: p.lat, lng: p.lng }));
+}
+
+export function toLatLngPath(points: LatLngPoint[]): { lat: number; lng: number }[] {
+  return toGooglePath(points);
 }

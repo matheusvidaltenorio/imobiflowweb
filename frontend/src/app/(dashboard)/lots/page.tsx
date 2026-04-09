@@ -79,7 +79,7 @@ export default function LotsPage() {
   const blockId = searchParams.get('block');
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const [viewMode, setViewMode] = useState<'list' | 'grid' | 'google'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'grid' | 'map'>('list');
   const [mapDialogLotId, setMapDialogLotId] = useState<string | null>(null);
 
   const { data: development } = useQuery({
@@ -143,7 +143,7 @@ export default function LotsPage() {
   });
 
   const mapLotsForBlock = (mapData?.lots ?? []).filter((l) => l.blockId === blockId);
-  const mapLotsForGoogle = blockId ? mapLotsForBlock : mapData?.lots ?? [];
+  const mapLotsForView = blockId ? mapLotsForBlock : mapData?.lots ?? [];
 
   const deleteBlock = useMutation({
     mutationFn: (id: string) => api.delete(`/blocks/${id}`),
@@ -314,7 +314,7 @@ export default function LotsPage() {
                 <Skeleton className="mt-10 h-[480px] w-full rounded-2xl" />
               ) : mapData ? (
                 <div className="mt-10 space-y-3">
-                  <h2 className="text-lg font-bold text-primary-950">Localização no mapa (Google)</h2>
+                  <h2 className="text-lg font-bold text-primary-950">Localização no mapa (MapLibre)</h2>
                   <p className="text-sm text-gray-600">
                     Visualize todos os lotes georreferenciados do empreendimento. Cadastre latitude/longitude ou
                     polígono na edição do lote ou do loteamento.
@@ -365,9 +365,9 @@ export default function LotsPage() {
                     <Button
                       type="button"
                       size="sm"
-                      variant={viewMode === 'google' ? 'brand' : 'ghost'}
+                      variant={viewMode === 'map' ? 'brand' : 'ghost'}
                       className="gap-1.5"
-                      onClick={() => setViewMode('google')}
+                      onClick={() => setViewMode('map')}
                     >
                       <MapIcon className="h-4 w-4" />
                       Mapa real
@@ -427,13 +427,13 @@ export default function LotsPage() {
                     </div>
                   )
                 ) : null}
-                {viewMode === 'google' ? (
+                {viewMode === 'map' ? (
                   mapLoading ? (
                     <Skeleton className="min-h-[420px] w-full rounded-2xl" />
                   ) : mapData ? (
                     <DevelopmentLotsMap
                       development={mapData.development}
-                      lots={mapLotsForGoogle}
+                      lots={mapLotsForView}
                       className="shadow-card"
                     />
                   ) : null

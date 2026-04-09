@@ -67,10 +67,13 @@ export class DevelopmentsService {
     slug?: string;
     description?: string;
     address?: string;
+    referenceAddress?: string;
     city: string;
     state?: string;
     neighborhood?: string;
     zipCode?: string;
+    locationPrecision?: 'EXATA' | 'APROXIMADA' | 'PENDENTE';
+    locationNotes?: string;
     latitude?: number;
     longitude?: number;
     placeId?: string;
@@ -90,9 +93,14 @@ export class DevelopmentsService {
         slug,
         description: data.description ? sanitizeInput(data.description) : null,
         address: data.address,
+        referenceAddress: data.referenceAddress?.trim() || null,
         city: data.city,
         state: data.state ? sanitizeInput(data.state) : null,
         neighborhood: data.neighborhood,
+        ...(data.locationPrecision
+          ? { locationPrecision: data.locationPrecision }
+          : {}),
+        locationNotes: data.locationNotes?.trim() || null,
         zipCode: data.zipCode?.trim() || null,
         latitude: ll ? new Prisma.Decimal(ll.lat) : null,
         longitude: ll ? new Prisma.Decimal(ll.lng) : null,
@@ -114,10 +122,13 @@ export class DevelopmentsService {
       name?: string;
       description?: string;
       address?: string;
+      referenceAddress?: string | null;
       city?: string;
       state?: string;
       neighborhood?: string;
       zipCode?: string | null;
+      locationPrecision?: 'EXATA' | 'APROXIMADA' | 'PENDENTE';
+      locationNotes?: string | null;
       latitude?: number | null;
       longitude?: number | null;
       placeId?: string | null;
@@ -134,12 +145,19 @@ export class DevelopmentsService {
         description: data.description ? sanitizeInput(data.description) : null,
       }),
       ...(data.address !== undefined && { address: data.address }),
+      ...(data.referenceAddress !== undefined && {
+        referenceAddress: data.referenceAddress?.trim() || null,
+      }),
       ...(data.city && { city: data.city }),
       ...(data.state !== undefined && {
         state: data.state ? sanitizeInput(data.state) : null,
       }),
       ...(data.neighborhood !== undefined && { neighborhood: data.neighborhood }),
       ...(data.zipCode !== undefined && { zipCode: data.zipCode?.trim() || null }),
+      ...(data.locationPrecision !== undefined && { locationPrecision: data.locationPrecision }),
+      ...(data.locationNotes !== undefined && {
+        locationNotes: data.locationNotes?.trim() || null,
+      }),
       ...(data.placeId !== undefined && { placeId: data.placeId?.trim() || null }),
       ...(data.coverImage !== undefined && { coverImage: data.coverImage }),
       ...(data.coverImageAlt !== undefined && { coverImageAlt: data.coverImageAlt }),

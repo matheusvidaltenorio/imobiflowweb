@@ -11,6 +11,7 @@ import { useToast } from '@/components/ui/toaster';
 import { PageHeader } from '@/components/dashboard/page-header';
 import { EmptyState } from '@/components/dashboard/empty-state';
 import { DevelopmentCover } from '@/components/developments/development-cover';
+import { LocationPrecisionBadge, type DevelopmentLocationPrecision } from '@/components/developments/location-precision-badge';
 
 export default function DevelopmentsPage() {
   const queryClient = useQueryClient();
@@ -27,6 +28,7 @@ export default function DevelopmentsPage() {
           slug?: string | null;
           coverImage?: string | null;
           coverImageAlt?: string | null;
+          locationPrecision?: DevelopmentLocationPrecision;
           lotsCount?: number;
           _count?: { properties: number; blocks: number };
         }>
@@ -89,7 +91,10 @@ export default function DevelopmentsPage() {
                         <MapPin className="h-5 w-5" strokeWidth={1.75} />
                       </div>
                       <div className="min-w-0">
-                        <h3 className="text-lg font-bold text-primary-950">{d.name}</h3>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="text-lg font-bold text-primary-950">{d.name}</h3>
+                          <LocationPrecisionBadge precision={d.locationPrecision ?? 'PENDENTE'} />
+                        </div>
                         {d.slug ? (
                           <p className="mt-0.5 font-mono text-[10px] text-gray-400">/{d.slug}</p>
                         ) : null}

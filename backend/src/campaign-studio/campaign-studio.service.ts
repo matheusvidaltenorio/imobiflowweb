@@ -53,17 +53,57 @@ export class CampaignStudioService {
     private readonly imageProvider: ICampaignImageGenerationProvider,
   ) {}
 
+  /**
+   * Corretor pode trabalhar em um loteamento se:
+   * - tiver imóvel (Property) vinculado ao empreendimento, ou
+   * - já tiver lead, visita, simulação ou campanha ligada a lotes/imóveis desse empreendimento.
+   * (Só Property exclui quem só usa lotes do catálogo demo sem vínculo.)
+   */
+  private async brokerHasDevelopmentAccess(userId: string, developmentId: string): Promise<boolean> {
+    const byProperty = await this.prisma.property.findFirst({
+      where: { userId, developmentId },
+      select: { id: true },
+    });
+    if (byProperty) return true;
+
+    const byLead = await this.prisma.lead.findFirst({
+      where: { userId, lot: { block: { developmentId } } },
+      select: { id: true },
+    });
+    if (byLead) return true;
+
+    const byVisit = await this.prisma.visit.findFirst({
+      where: { userId, lot: { block: { developmentId } } },
+      select: { id: true },
+    });
+    if (byVisit) return true;
+
+    const bySim = await this.prisma.simulation.findFirst({
+      where: {
+        userId,
+        OR: [{ lot: { block: { developmentId } } }, { property: { developmentId } }],
+      },
+      select: { id: true },
+    });
+    if (bySim) return true;
+
+    const byCampaign = await this.prisma.marketingCampaign.findFirst({
+      where: { userId, developmentId },
+      select: { id: true },
+    });
+    if (byCampaign) return true;
+
+    return false;
+  }
+
   private async assertDevelopmentAccess(
     userId: string,
     role: UserRole,
     developmentId: string,
   ): Promise<void> {
     if (role === UserRole.ADMIN) return;
-    const r = await this.prisma.property.findFirst({
-      where: { userId, developmentId },
-      select: { id: true },
-    });
-    if (!r) throw new ForbiddenException('Sem permissão para este loteamento.');
+    const ok = await this.brokerHasDevelopmentAccess(userId, developmentId);
+    if (!ok) throw new ForbiddenException('Sem permissão para este loteamento.');
   }
 
   private async assertCampaignOwner(userId: string, role: UserRole, campaignId: string) {
@@ -82,9 +122,10 @@ export class CampaignStudioService {
   async create(userId: string, role: UserRole, dto: CreateCampaignDto) {
     await this.assertDevelopmentAccess(userId, role, dto.developmentId);
 
-    if (dto.lotId) {
+    const lotId = dto.lotId?.trim() || undefined;
+    if (lotId) {
       const lot = await this.prisma.lot.findUnique({
-        where: { id: dto.lotId },
+        where: { id: lotId },
         select: { id: true, block: { select: { developmentId: true } } },
       });
       if (!lot) throw new NotFoundException('Lote não encontrado');
@@ -100,7 +141,7 @@ export class CampaignStudioService {
         data: {
           userId,
           developmentId: dto.developmentId,
-          lotId: dto.lotId ?? null,
+          lotId: lotId ?? null,
           title: dto.title.trim(),
           objective: dto.objective ?? undefined,
           targets: {

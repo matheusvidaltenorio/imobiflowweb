@@ -12,6 +12,7 @@ import {
   Upload,
   Wand2,
 } from 'lucide-react';
+import { AxiosError } from 'axios';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -20,6 +21,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/toaster';
 import { cn } from '@/lib/utils';
 import type { InstagramAdPack } from './instagram-ad-generator';
+
 import { CampaignPlatformPreview, WhatsAppActionHint } from './campaign-previews';
 import { buildWhatsAppShareUrl } from '@/lib/whatsapp';
 
@@ -119,6 +121,16 @@ type Props = {
   /** Nome do empreendimento para prévias realistas */
   developmentName?: string;
 };
+
+function apiErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof AxiosError) {
+    const data = err.response?.data as { message?: string | string[] } | undefined;
+    if (data?.message) {
+      return Array.isArray(data.message) ? data.message.join(', ') : data.message;
+    }
+  }
+  return fallback;
+}
 
 const STEPS = [
   { n: 1, label: 'Plataformas e rascunho' },
@@ -225,7 +237,11 @@ export function CampaignStudioWizard({
       toast({ title: 'Rascunho criado', type: 'success' });
       setStep(2);
     },
-    onError: () => toast({ title: 'Erro ao criar campanha', type: 'error' }),
+    onError: (err) =>
+      toast({
+        title: apiErrorMessage(err, 'Erro ao criar campanha'),
+        type: 'error',
+      }),
   });
 
   const generateText = useMutation({

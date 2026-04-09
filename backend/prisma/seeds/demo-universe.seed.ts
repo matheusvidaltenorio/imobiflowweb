@@ -324,6 +324,35 @@ export async function seedDemoUniverse(prisma: PrismaClient): Promise<void> {
     });
   }
 
+  /** Permite ao corretor principal usar campanhas/ranking nos loteamentos demo (Property + developmentId). */
+  if (mainBroker) {
+    for (const devId of devIds) {
+      const dev = await prisma.development.findUnique({
+        where: { id: devId },
+        select: { id: true, name: true, city: true },
+      });
+      if (!dev) continue;
+      const exists = await prisma.property.findFirst({
+        where: { userId: mainBroker.id, developmentId: devId },
+        select: { id: true },
+      });
+      if (exists) continue;
+      await prisma.property.create({
+        data: {
+          userId: mainBroker.id,
+          developmentId: devId,
+          title: `Catálogo — ${dev.name}`,
+          description: 'Vínculo ao catálogo para permissões de corretor (demo).',
+          type: 'TERRENO',
+          status: 'DISPONIVEL',
+          price: new Prisma.Decimal(0),
+          city: dev.city,
+          neighborhood: '—',
+        },
+      });
+    }
+  }
+
   const clientRows: { id: string }[] = [];
   const firstNames = ['Mariana', 'Carlos', 'Fernanda', 'Ricardo', 'Juliana'];
   const lastNames = ['Alves', 'Monteiro', 'Santos', 'Lima', 'Costa'];

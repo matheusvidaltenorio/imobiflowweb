@@ -71,6 +71,14 @@ export type InstagramVariation = {
   cta: string;
   hashtags: string;
   keyArguments: string[];
+  /** Legenda curta (WhatsApp / limite story) */
+  shortCaption: string;
+  /** Tom mais formal / institucional */
+  professionalCaption: string;
+  /** Tom mais comercial / conversão */
+  persuasiveCaption: string;
+  /** Headline + CTA + hashtags, direto ao ponto */
+  directCaption: string;
 };
 
 export type InstagramAdPack = {
@@ -336,18 +344,31 @@ function oneVariation(
     seed,
   );
 
+  const hashtags = buildHashtags(ctx, seed + 9);
+  const feedTrim = feed.trim();
+  const storyTrim = story.trim();
+  const shortCaption =
+    storyTrim.length <= 280 ? storyTrim : `${headline}\n${cta}`.slice(0, 280);
+  const professionalCaption = `📋 ${headline}\n\n${feedTrim}\n\n${cta}`.trim();
+  const persuasiveCaption = `${headline}\n\n${feedTrim}\n\n👉 ${cta}\n\n${hashtags}`.trim();
+  const directCaption = `${headline}\n${cta}\n${place}\n${hashtags}`.trim();
+
   return {
     label: style === 'objetiva' ? 'Versão objetiva' : style === 'consultiva' ? 'Versão consultiva' : 'Versão persuasiva',
     headline,
-    feedCaption: feed.trim(),
-    storyText: story.trim(),
+    feedCaption: feedTrim,
+    storyText: storyTrim,
     reelScript: { hook, body: body.trim(), closing: closing.trim() },
     carouselSlides: carouselSlides(ctx, obj, seed + 7),
     sponsoredText: sponsored,
     whatsappBridge: wa,
     cta,
-    hashtags: buildHashtags(ctx, seed + 9),
+    hashtags,
     keyArguments: keyArguments(ctx),
+    shortCaption,
+    professionalCaption,
+    persuasiveCaption,
+    directCaption,
   };
 }
 

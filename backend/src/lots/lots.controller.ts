@@ -33,8 +33,17 @@ export class LotsController {
 
   @Public()
   @Get('development/:developmentId/map')
-  mapByDevelopment(@Param('developmentId') developmentId: string) {
-    return this.lots.findMapByDevelopment(developmentId);
+  mapByDevelopment(
+    @Param('developmentId') developmentId: string,
+    @Query('nearbyRadius') nearbyRadius?: string,
+    @Query('nearbyMode') nearbyMode?: string,
+  ) {
+    const r = nearbyRadius ? parseInt(nearbyRadius, 10) : 3000;
+    const mode = nearbyMode === 'walking' ? 'walking' : 'driving';
+    return this.lots.findMapByDevelopment(developmentId, {
+      nearbyRadiusMeters: Number.isFinite(r) && r > 0 ? r : 3000,
+      nearbyTravelMode: mode,
+    });
   }
 
   @Public()

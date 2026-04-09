@@ -55,6 +55,10 @@ export type InstagramVariation = {
   cta: string;
   hashtags: string;
   keyArguments: string[];
+  shortCaption?: string;
+  professionalCaption?: string;
+  persuasiveCaption?: string;
+  directCaption?: string;
 };
 
 export type InstagramAdPack = {

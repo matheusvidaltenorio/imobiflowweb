@@ -15,9 +15,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/toaster';
 import Link from 'next/link';
-import { DevelopmentLotsMap, type GeoMapDevelopment, type GeoMapLot } from '@/components/maps/development-lots-map';
+import {
+  DevelopmentLotsMap,
+  type GeoMapDevelopment,
+  type GeoMapLot,
+  type GeoMapNearbyPlace,
+} from '@/components/maps/development-lots-map';
 import type { DevelopmentLocationPrecision } from '@/components/developments/location-precision-badge';
-import { InstagramAdGenerator } from '@/components/marketing/instagram-ad-generator';
+import { CampaignStudioWizard } from '@/components/marketing/campaign-studio-wizard';
 import { googleDirectionsUrl } from '@/lib/maps/lot-map-styles';
 
 const schema = z.object({
@@ -51,6 +56,7 @@ export default function EditLotPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [pitch, setPitch] = useState<LotPitchBundle | null>(null);
+  const [nearbyTravelMode, setNearbyTravelMode] = useState<'driving' | 'walking'>('driving');
 
   const { data: lot, isLoading } = useQuery({
     queryKey: ['lot', id],
@@ -77,6 +83,7 @@ export default function EditLotPage() {
           development?: {
             id: string;
             name: string;
+            description?: string | null;
             city?: string;
             state?: string | null;
             address?: string | null;
@@ -92,6 +99,17 @@ export default function EditLotPage() {
         };
       };
     },
+  });
+
+  const { data: devMapMini } = useQuery({
+    queryKey: ['lot-map', developmentId, nearbyTravelMode],
+    queryFn: async () => {
+      const { data } = await api.get<{ nearbyPlaces?: GeoMapNearbyPlace[] }>(
+        `/lots/development/${developmentId}/map?nearbyRadius=3000&nearbyMode=${nearbyTravelMode}`,
+      );
+      return data;
+    },
+    enabled: !!developmentId && !!lot?.block?.development?.id,
   });
 
   const lotPitch = useMutation({
@@ -165,6 +183,7 @@ export default function EditLotPage() {
     ? {
         id: dev.id,
         name: dev.name,
+        description: dev.description,
         city: dev.city ?? '',
         state: dev.state,
         address: dev.address,
@@ -359,8 +378,23 @@ export default function EditLotPage() {
             </p>
           )}
           {geoDev ? (
-            <div className="mt-6">
-              <DevelopmentLotsMap development={geoDev} lots={[geoLot]} highlightLotId={lot.id} compact />
+            <div className="mt-6 space-y-2">
+              <p className="text-sm text-gray-800">
+                <span className="font-bold text-primary-950">Lote {lot.number}</span>
+                <span className="text-gray-500"> · Quadra {lot.block?.name ?? '—'}</span>
+                <span className="text-gray-500"> · </span>
+                <span className="font-semibold text-primary-800">{geoDev.name}</span>
+                <span className="text-gray-500"> ({geoDev.city})</span>
+              </p>
+              <DevelopmentLotsMap
+                development={geoDev}
+                lots={[geoLot]}
+                highlightLotId={lot.id}
+                compact
+                nearbyPlaces={devMapMini?.nearbyPlaces ?? []}
+                nearbyTravelMode={nearbyTravelMode}
+                onNearbyTravelModeChange={setNearbyTravelMode}
+              />
             </div>
           ) : null}
         </Card>
@@ -478,7 +512,15 @@ export default function EditLotPage() {
           )}
         </Card>
 
-        <InstagramAdGenerator mode="lot" lotId={id} />
+        {lot?.block?.development?.id ? (
+          <CampaignStudioWizard
+            mode="lot"
+            lotId={id}
+            developmentId={lot.block.development.id}
+            developmentName={lot.block.development.name}
+            defaultTitle={`Divulgação — lote ${lot.number}`}
+          />
+        ) : null}
     </main>
   );
 }

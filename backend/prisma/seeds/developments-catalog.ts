@@ -58,14 +58,14 @@ export const DEVELOPMENTS_CATALOG: DevelopmentCatalogEntry[] = [
   },
   {
     name: 'Vale do Cariri',
-    city: 'Juazeiro do Norte',
+    city: 'Barbalha',
     state: 'CE',
     description: 'Loteamento com ampla área e potencial de valorização',
     imageFile: 'vale-do-cariri.jpg',
   },
   {
     name: 'O Conviver Riviera',
-    city: 'Juazeiro do Norte',
+    city: 'Barbalha',
     state: 'CE',
     description: genericDescription(2),
     imageFile: 'o-conviver-riviera.jpg',
@@ -177,7 +177,7 @@ export const DEVELOPMENTS_CATALOG: DevelopmentCatalogEntry[] = [
   },
   {
     name: 'Canaã',
-    city: 'Juazeiro do Norte',
+    city: 'Barbalha',
     state: 'CE',
     description: genericDescription(3),
     imageFile: 'canaa.jpg',

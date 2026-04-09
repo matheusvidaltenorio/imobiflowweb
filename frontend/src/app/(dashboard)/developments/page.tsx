@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { MapPin, Pencil, Plus, Trash2, Layers } from 'lucide-react';
+import { MapPin, MapPinned, Pencil, Plus, Trash2, Layers } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -115,6 +115,12 @@ export default function DevelopmentsPage() {
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2 sm:justify-end">
+                    <Link href={`/lots?development=${d.id}&focusMap=1`}>
+                      <Button variant="secondary" size="sm" type="button" className="gap-1.5">
+                        <MapPinned className="h-3.5 w-3.5" />
+                        Ver no mapa
+                      </Button>
+                    </Link>
                     <Link href={`/lots?development=${d.id}`}>
                       <Button variant="brand" size="sm" type="button" className="gap-1.5">
                         <Layers className="h-3.5 w-3.5" />

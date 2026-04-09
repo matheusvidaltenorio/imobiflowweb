@@ -99,6 +99,12 @@ enum DevelopmentLocationPrecision {
   PENDENTE
 }
 
+enum DevelopmentGeocodingStatus {
+  VERIFIED
+  APPROXIMATE
+  PENDING
+}
+
 enum InstagramContentType {
   FEED
   STORY
@@ -131,6 +137,49 @@ enum InstagramAdObjective {
   AUTO
 }
 
+enum MarketingCampaignStatus {
+  DRAFT
+  READY
+  ARCHIVED
+}
+
+enum CampaignAssetKind {
+  IMAGE
+  VIDEO
+  GENERATED_IMAGE
+  UPLOADED_IMAGE
+  SYSTEM_IMAGE
+}
+
+enum CampaignAssetOrigin {
+  BANK
+  UPLOAD
+  AI
+}
+
+enum PublicationPlatform {
+  INSTAGRAM_FEED
+  INSTAGRAM_STORY
+  INSTAGRAM_REEL
+  FACEBOOK_POST
+  WHATSAPP
+  EXPORT_PACKAGE
+}
+
+enum PublicationTargetStatus {
+  PREPARED
+  EXPORT_PENDING
+  PUBLISHED
+  FAILED
+}
+
+enum AiImageJobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
 model User {
   id            String    @id @default(cuid())
   email         String    @unique
@@ -158,6 +207,7 @@ model User {
   leadInteractions LeadInteraction[]
   aiMessageSuggestions AiMessageSuggestion[]
   instagramAdSuggestions InstagramAdSuggestion[]
+  marketingCampaigns     MarketingCampaign[]
 }
 
 model Property {
@@ -222,6 +272,9 @@ model Development {
   slug          String?  @unique
   description   String?
   address       String?
+  /// Logradouro (rua) estruturado, quando separado de `address`.
+  street        String?
+  streetNumber  String?  @map("street_number")
   city          String
   state         String?
   neighborhood  String?
@@ -230,6 +283,11 @@ model Development {
   referenceAddress String? @map("reference_address") @db.Text
   locationPrecision DevelopmentLocationPrecision @default(PENDENTE) @map("location_precision")
   locationNotes String? @map("location_notes") @db.Text
+  placeName     String?  @map("place_name")
+  geocodingStatus DevelopmentGeocodingStatus @default(PENDING) @map("geocoding_status")
+  geocodingConfidence Decimal? @map("geocoding_confidence") @db.Decimal(6, 4)
+  polygonSource String?  @map("polygon_source")
+  locationVerifiedAt DateTime? @map("location_verified_at")
   latitude      Decimal? @db.Decimal(10, 7)
   longitude     Decimal? @db.Decimal(10, 7)
   placeId       String?
@@ -244,9 +302,39 @@ model Development {
   properties  Property[]
   blocks      Block[]
   instagramAdSuggestions InstagramAdSuggestion[]
+  marketingCampaigns     MarketingCampaign[]
+  nearbyPlaces DevelopmentNearbyPlace[]
 
   @@index([city])
   @@index([name])
+  @@index([geocodingStatus])
+}
+
+/// POIs próximos ao loteamento (cache; fonte típica Overpass/OSM).
+model DevelopmentNearbyPlace {
+  id                   String   @id @default(cuid())
+  developmentId        String   @map("development_id")
+  name                 String
+  category             String
+  subcategory          String?
+  latitude             Decimal  @db.Decimal(10, 7)
+  longitude            Decimal  @db.Decimal(10, 7)
+  shortAddress         String?  @map("short_address")
+  source               String   @default("overpass")
+  sourceOsmId          String?  @map("source_osm_id")
+  searchRadiusMeters   Int      @default(3000) @map("search_radius_meters")
+  distanceMeters       Int?     @map("distance_meters")
+  travelTimeMinutes    Int?     @map("travel_time_minutes")
+  travelMode           String   @default("driving") @map("travel_mode")
+  routeSource          String?  @map("route_source")
+  fetchedAt            DateTime @default(now()) @map("fetched_at")
+  updatedAt            DateTime @updatedAt
+
+  development Development @relation(fields: [developmentId], references: [id], onDelete: Cascade)
+
+  @@index([developmentId])
+  @@index([category])
+  @@unique([developmentId, source, sourceOsmId, travelMode, searchRadiusMeters])
 }
 
 model Block {
@@ -294,6 +382,7 @@ model Lot {
   visits      Visit[]
   aiMessageSuggestions AiMessageSuggestion[]
   instagramAdSuggestions InstagramAdSuggestion[]
+  marketingCampaigns     MarketingCampaign[]
   simulations            Simulation[]
 
   @@index([blockId])
@@ -343,6 +432,115 @@ model InstagramAdSuggestion {
   @@index([lotId])
   @@index([developmentId])
   @@index([createdAt])
+}
+
+model MarketingCampaign {
+  id                 String                   @id @default(cuid())
+  userId             String                   @map("user_id")
+  developmentId      String                   @map("development_id")
+  lotId              String?                  @map("lot_id")
+  title              String
+  objective          InstagramAdObjective     @default(AUTO)
+  status             MarketingCampaignStatus  @default(DRAFT)
+  primaryContentType InstagramContentType     @default(FEED) @map("primary_content_type")
+  packJson           Json?                    @map("pack_json")
+  lastGeneratedAt    DateTime?                @map("last_generated_at")
+  createdAt          DateTime                 @default(now()) @map("created_at")
+  updatedAt          DateTime                 @updatedAt @map("updated_at")
+
+  user         User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  development  Development                 @relation(fields: [developmentId], references: [id], onDelete: Cascade)
+  lot          Lot?                        @relation(fields: [lotId], references: [id], onDelete: SetNull)
+  assets       CampaignAsset[]
+  targets      CampaignPublicationTarget[]
+  copies       CampaignCopy[]
+  aiImageJobs  AiImageGenerationJob[]
+
+  @@index([userId])
+  @@index([developmentId])
+  @@index([lotId])
+  @@index([createdAt])
+  @@map("marketing_campaigns")
+}
+
+model CampaignAsset {
+  id         String              @id @default(cuid())
+  campaignId String              @map("campaign_id")
+  kind       CampaignAssetKind
+  origin     CampaignAssetOrigin
+  url        String
+  publicId   String?             @map("public_id")
+  fileName   String?             @map("file_name")
+  mimeType   String?             @map("mime_type")
+  isPrimary  Boolean             @default(false) @map("is_primary")
+  sortOrder  Int                 @default(0) @map("sort_order")
+  createdAt  DateTime            @default(now()) @map("created_at")
+
+  campaign MarketingCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+  @@map("campaign_assets")
+}
+
+model CampaignPublicationTarget {
+  id                  String                  @id @default(cuid())
+  campaignId          String                  @map("campaign_id")
+  platform            PublicationPlatform
+  aspectHint          String?                 @map("aspect_hint")
+  status              PublicationTargetStatus @default(EXPORT_PENDING)
+  publishedAt         DateTime?               @map("published_at")
+  externalPostId      String?                 @map("external_post_id")
+  externalContainerId String?                 @map("external_container_id")
+  publishError        String?                 @map("publish_error") @db.Text
+  createdAt           DateTime                @default(now()) @map("created_at")
+  updatedAt           DateTime                @updatedAt @map("updated_at")
+
+  campaign MarketingCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, platform])
+  @@map("campaign_publication_targets")
+}
+
+model CampaignCopy {
+  id               String              @id @default(cuid())
+  campaignId       String              @map("campaign_id")
+  platform         PublicationPlatform
+  title            String?             @db.Text
+  caption          String?             @db.Text
+  shortCaption     String?             @map("short_caption") @db.Text
+  cta              String?             @db.Text
+  hashtags         String?             @db.Text
+  reelScriptJson   Json?               @map("reel_script_json")
+  professionalTone String?             @map("professional_tone") @db.Text
+  persuasiveTone   String?             @map("persuasive_tone") @db.Text
+  directTone       String?             @map("direct_tone") @db.Text
+  justification    String?             @db.Text
+  createdAt        DateTime            @default(now()) @map("created_at")
+  updatedAt        DateTime            @updatedAt @map("updated_at")
+
+  campaign MarketingCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, platform])
+  @@map("campaign_copies")
+}
+
+model AiImageGenerationJob {
+  id             String           @id @default(cuid())
+  campaignId     String           @map("campaign_id")
+  provider       String
+  prompt         String           @db.Text
+  status         AiImageJobStatus @default(PENDING)
+  resultUrl      String?          @map("result_url")
+  resultPublicId String?          @map("result_public_id")
+  errorMessage   String?          @map("error_message") @db.Text
+  variationIndex Int?             @map("variation_index")
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+
+  campaign MarketingCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+  @@map("ai_image_generation_jobs")
 }
 
 model Visit {

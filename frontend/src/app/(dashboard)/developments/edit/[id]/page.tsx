@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -14,10 +14,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/toaster';
 import Link from 'next/link';
-import { DevelopmentLotsMap, type GeoMapDevelopment, type GeoMapLot } from '@/components/maps/development-lots-map';
+import {
+  DevelopmentLotsMap,
+  type GeoMapDevelopment,
+  type GeoMapLot,
+  type GeoMapNearbyPlace,
+} from '@/components/maps/development-lots-map';
 import { DevelopmentCover } from '@/components/developments/development-cover';
 import type { DevelopmentLocationPrecision } from '@/components/developments/location-precision-badge';
-import { InstagramAdGenerator } from '@/components/marketing/instagram-ad-generator';
+import { CampaignStudioWizard } from '@/components/marketing/campaign-studio-wizard';
+import { NearbyPlacesSummary } from '@/components/maps/nearby-places-summary';
 
 const locationPrecisionEnum = z.enum(['EXATA', 'APROXIMADA', 'PENDENTE']);
 
@@ -63,6 +69,7 @@ type DevDto = {
 
 type MapPayload = {
   development: GeoMapDevelopment & { coverImage?: string | null };
+  nearbyPlaces?: GeoMapNearbyPlace[];
   lots: GeoMapLot[];
 };
 
@@ -73,6 +80,7 @@ export default function EditDevelopmentPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const coverInputRef = useRef<HTMLInputElement>(null);
+  const [nearbyTravelMode, setNearbyTravelMode] = useState<'driving' | 'walking'>('driving');
 
   const { data: dev, isLoading } = useQuery({
     queryKey: ['development', id],
@@ -83,12 +91,34 @@ export default function EditDevelopmentPage() {
   });
 
   const { data: mapData, isLoading: mapLoading } = useQuery({
-    queryKey: ['lot-map', id],
+    queryKey: ['lot-map', id, nearbyTravelMode],
     queryFn: async () => {
-      const { data } = await api.get<MapPayload>(`/lots/development/${id}/map`);
+      const { data } = await api.get<MapPayload>(
+        `/lots/development/${id}/map?nearbyRadius=3000&nearbyMode=${nearbyTravelMode}`,
+      );
       return data;
     },
     enabled: !!dev?.id,
+  });
+
+  const refreshNearby = useMutation({
+    mutationFn: () =>
+      api.post(`/maps/developments/${id}/nearby/refresh`, {
+        radiusMeters: 3000,
+        travelMode: nearbyTravelMode,
+      }),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['lot-map', id] });
+      toast({
+        title: (res.data as { message?: string })?.message ?? 'Serviços próximos atualizados',
+        type: 'success',
+      });
+    },
+    onError: () =>
+      toast({
+        title: 'Não foi possível consultar Overpass/OSRM. Tente mais tarde ou use instância própria.',
+        type: 'error',
+      }),
   });
 
   const { register, handleSubmit, setValue, getValues } = useForm<FormValues>({
@@ -398,17 +428,30 @@ export default function EditDevelopmentPage() {
           Lotes com latitude/longitude ou polígono aparecem automaticamente. Cadastre geo em cada lote para precisão na
           visita.
         </p>
+        {!mapLoading && mapData ? (
+          <NearbyPlacesSummary places={mapData.nearbyPlaces ?? []} travelMode={nearbyTravelMode} />
+        ) : null}
         {mapLoading ? (
           <div className="h-[480px] animate-pulse rounded-xl bg-surface-muted/80" />
         ) : mapData ? (
-          <DevelopmentLotsMap development={mapData.development} lots={mapData.lots} />
+          <DevelopmentLotsMap
+            development={mapData.development}
+            lots={mapData.lots}
+            nearbyPlaces={mapData.nearbyPlaces ?? []}
+            nearbyTravelMode={nearbyTravelMode}
+            onNearbyTravelModeChange={setNearbyTravelMode}
+            onRefreshNearby={() => refreshNearby.mutate()}
+            nearbyRefreshing={refreshNearby.isPending}
+          />
         ) : null}
       </div>
 
-      <InstagramAdGenerator
+      <CampaignStudioWizard
         mode="development"
         developmentId={id}
-        title="Gerar anúncio geral do loteamento (Instagram)"
+        developmentName={dev?.name}
+        defaultTitle={`Divulgação — loteamento`}
+        title="Estúdio de divulgação do loteamento"
       />
     </main>
   );

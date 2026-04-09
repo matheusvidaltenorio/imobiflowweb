@@ -27,6 +27,7 @@ import { CommercialAssistantModule } from './commercial-assistant/commercial-ass
 import { ClosingPredictionModule } from './closing-prediction/closing-prediction.module';
 import { MapsModule } from './maps/maps.module';
 import { InstagramAdsModule } from './instagram-ads/instagram-ads.module';
+import { CampaignStudioModule } from './campaign-studio/campaign-studio.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 
@@ -44,6 +45,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     ClosingPredictionModule,
     MapsModule,
     InstagramAdsModule,
+    CampaignStudioModule,
     CloudinaryModule,
     AuthModule,
     UsersModule,

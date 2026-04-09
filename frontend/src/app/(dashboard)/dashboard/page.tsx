@@ -130,6 +130,12 @@ type DashboardData = {
   closingForecast?: ClosingForecast;
   messageRecommendations?: { items: MessageRecommendationItem[] };
   instagramAdRecommendations?: { items: InstagramAdRecommendation[] };
+  mapInsights?: {
+    developmentsWithCoords: number;
+    developmentsWithPolygon: number;
+    developmentsPendingGeo: number;
+    nearbyPlacesCount: number;
+  };
   recentLeads?: Array<{
     id: string;
     name: string;
@@ -375,6 +381,40 @@ export default function DashboardPage() {
                 ))}
               </div>
             </section>
+
+            {data?.mapInsights ? (
+              <section className="mb-10">
+                <h2 className="mb-4 text-sm font-bold uppercase tracking-wider text-gray-500">
+                  Mapas e localização
+                </h2>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <Card className="border-l-4 border-l-emerald-500 p-5">
+                    <p className="text-sm font-semibold text-gray-600">Loteamentos com coordenadas</p>
+                    <p className="mt-1 text-3xl font-bold tabular-nums text-primary-950">
+                      {data.mapInsights.developmentsWithCoords}
+                    </p>
+                  </Card>
+                  <Card className="border-l-4 border-l-green-600 p-5">
+                    <p className="text-sm font-semibold text-gray-600">Com polígono no mapa</p>
+                    <p className="mt-1 text-3xl font-bold tabular-nums text-primary-950">
+                      {data.mapInsights.developmentsWithPolygon}
+                    </p>
+                  </Card>
+                  <Card className="border-l-4 border-l-amber-500 p-5">
+                    <p className="text-sm font-semibold text-gray-600">Geocodificação pendente</p>
+                    <p className="mt-1 text-3xl font-bold tabular-nums text-primary-950">
+                      {data.mapInsights.developmentsPendingGeo}
+                    </p>
+                  </Card>
+                  <Card className="border-l-4 border-l-sky-500 p-5">
+                    <p className="text-sm font-semibold text-gray-600">Serviços próximos (cache)</p>
+                    <p className="mt-1 text-3xl font-bold tabular-nums text-primary-950">
+                      {data.mapInsights.nearbyPlacesCount}
+                    </p>
+                  </Card>
+                </div>
+              </section>
+            ) : null}
 
             <section className="mb-10">
               <h2 className="mb-4 text-sm font-bold uppercase tracking-wider text-gray-500">

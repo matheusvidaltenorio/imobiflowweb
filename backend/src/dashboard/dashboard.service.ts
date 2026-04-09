@@ -5,6 +5,7 @@ import { LotScoringService } from '../lot-scoring/lot-scoring.service';
 import { CommercialAssistantService } from '../commercial-assistant/commercial-assistant.service';
 import { ClosingPredictionService } from '../closing-prediction/closing-prediction.service';
 import { InstagramAdsService } from '../instagram-ads/instagram-ads.service';
+import { MapDataService } from '../maps/map-data.service';
 
 @Injectable()
 export class DashboardService {
@@ -14,6 +15,7 @@ export class DashboardService {
     private commercialAssistant: CommercialAssistantService,
     private closingPrediction: ClosingPredictionService,
     private instagramAds: InstagramAdsService,
+    private mapData: MapDataService,
   ) {}
 
   private async leadWhereForBroker(userId: string, role: UserRole): Promise<Prisma.LeadWhereInput> {
@@ -151,6 +153,26 @@ export class DashboardService {
       role,
     );
 
+    const [developmentsWithCoords, developmentsPendingGeo, nearbyPlacesCount, polygonCountRow] =
+      await Promise.all([
+        this.prisma.development.count({
+          where: { AND: [{ latitude: { not: null } }, { longitude: { not: null } }] },
+        }),
+        this.prisma.development.count({ where: { geocodingStatus: 'PENDING' } }),
+        this.prisma.developmentNearbyPlace.count(),
+        this.prisma.$queryRaw<Array<{ n: bigint }>>`
+          SELECT COUNT(*)::bigint AS n FROM "Development" WHERE "polygonCoordinates" IS NOT NULL
+        `,
+      ]);
+    const developmentsWithPolygon = Number(polygonCountRow[0]?.n ?? 0);
+
+    const mapInsights = {
+      developmentsWithCoords,
+      developmentsWithPolygon,
+      developmentsPendingGeo,
+      nearbyPlacesCount,
+    };
+
     return {
       propertiesCount,
       visitsCount,
@@ -174,6 +196,7 @@ export class DashboardService {
       messageRecommendations,
       closingForecast,
       instagramAdRecommendations,
+      mapInsights,
     };
   }
 }

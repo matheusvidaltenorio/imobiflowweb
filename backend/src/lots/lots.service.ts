@@ -225,7 +225,13 @@ export class LotsService {
     return { ok: true };
   }
 
-  async findMapByDevelopment(developmentId: string) {
+  async findMapByDevelopment(
+    developmentId: string,
+    opts?: { nearbyRadiusMeters?: number; nearbyTravelMode?: string },
+  ) {
+    const nearbyRadius = opts?.nearbyRadiusMeters ?? 3000;
+    const nearbyMode = opts?.nearbyTravelMode === 'walking' ? 'walking' : 'driving';
+
     const dev = await this.prisma.development.findUnique({
       where: { id: developmentId },
       include: {
@@ -234,6 +240,13 @@ export class LotsService {
           include: {
             lots: { orderBy: { number: 'asc' } },
           },
+        },
+        nearbyPlaces: {
+          where: {
+            searchRadiusMeters: nearbyRadius,
+            travelMode: nearbyMode,
+          },
+          orderBy: [{ category: 'asc' }, { travelTimeMinutes: 'asc' }],
         },
       },
     });
@@ -314,24 +327,47 @@ export class LotsService {
 
     lots.sort((a, b) => b.priorityScore - a.priorityScore || (a.price ?? 0) - (b.price ?? 0));
 
+    const nearbyRows = dev.nearbyPlaces;
+
     return {
       development: {
         id: dev.id,
         name: dev.name,
+        description: dev.description,
         city: dev.city,
         state: dev.state,
         address: dev.address,
+        street: dev.street,
+        streetNumber: dev.streetNumber,
         referenceAddress: dev.referenceAddress,
         neighborhood: dev.neighborhood,
         zipCode: dev.zipCode,
         locationPrecision: dev.locationPrecision,
         locationNotes: dev.locationNotes,
+        placeName: dev.placeName,
+        geocodingStatus: dev.geocodingStatus,
         latitude: dev.latitude != null ? Number(dev.latitude) : null,
         longitude: dev.longitude != null ? Number(dev.longitude) : null,
         placeId: dev.placeId,
         polygonCoordinates: dev.polygonCoordinates,
+        polygonSource: dev.polygonSource,
         coverImage: dev.coverImage,
       },
+      nearbyPlaces: nearbyRows.map((r) => ({
+        id: r.id,
+        name: r.name,
+        category: r.category,
+        subcategory: r.subcategory,
+        latitude: Number(r.latitude),
+        longitude: Number(r.longitude),
+        shortAddress: r.shortAddress,
+        distanceMeters: r.distanceMeters,
+        travelTimeMinutes: r.travelTimeMinutes,
+        travelMode: r.travelMode,
+        routeSource: r.routeSource,
+        source: r.source,
+      })),
+      nearbyQuery: { radiusMeters: nearbyRadius, travelMode: nearbyMode },
       medianPrice,
       lots,
     };

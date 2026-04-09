@@ -41,21 +41,27 @@ export function LotPaymentSimulator({ defaultLotValue = 0, defaultIncome = 0 }: 
         Cálculo simples (sem juros). Use como referência rápida na negociação.
       </p>
       <div className="grid gap-3 sm:grid-cols-2">
-        <div>
-          <Label>Valor do lote (R$)</Label>
-          <Input value={lotValue} onChange={(e) => setLotValue(e.target.value)} inputMode="decimal" placeholder="0" />
+        <div className="flex min-h-[6.25rem] flex-col sm:min-h-[5.75rem]">
+          <Label className="mb-2 leading-snug">Valor do lote (R$)</Label>
+          <Input
+            className="mt-auto"
+            value={lotValue}
+            onChange={(e) => setLotValue(e.target.value)}
+            inputMode="decimal"
+            placeholder="0"
+          />
         </div>
-        <div>
-          <Label>Entrada (R$)</Label>
-          <Input value={down} onChange={(e) => setDown(e.target.value)} inputMode="decimal" placeholder="0" />
+        <div className="flex min-h-[6.25rem] flex-col sm:min-h-[5.75rem]">
+          <Label className="mb-2 leading-snug">Entrada (R$)</Label>
+          <Input className="mt-auto" value={down} onChange={(e) => setDown(e.target.value)} inputMode="decimal" placeholder="0" />
         </div>
-        <div>
-          <Label>Parcelas (quantidade)</Label>
-          <Input value={months} onChange={(e) => setMonths(e.target.value)} inputMode="numeric" />
+        <div className="flex min-h-[6.25rem] flex-col sm:min-h-[5.75rem]">
+          <Label className="mb-2 leading-snug">Parcelas (quantidade)</Label>
+          <Input className="mt-auto" value={months} onChange={(e) => setMonths(e.target.value)} inputMode="numeric" />
         </div>
-        <div>
-          <Label>Renda familiar (R$/mês) — opcional</Label>
-          <Input value={income} onChange={(e) => setIncome(e.target.value)} inputMode="decimal" placeholder="0" />
+        <div className="flex min-h-[6.25rem] flex-col sm:min-h-[5.75rem]">
+          <Label className="mb-2 leading-snug">Renda familiar (R$/mês) — opcional</Label>
+          <Input className="mt-auto" value={income} onChange={(e) => setIncome(e.target.value)} inputMode="decimal" placeholder="0" />
         </div>
       </div>
       <div className="mt-4 space-y-2 rounded-xl bg-surface p-4 text-sm">

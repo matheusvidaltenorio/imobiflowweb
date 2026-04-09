@@ -6,13 +6,21 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { DevelopmentLotsMap, type GeoMapDevelopment, type GeoMapLot } from '@/components/maps/development-lots-map';
+import {
+  DevelopmentLotsMap,
+  type GeoMapDevelopment,
+  type GeoMapLot,
+  type GeoMapNearbyPlace,
+} from '@/components/maps/development-lots-map';
 
 export function LotMapDialog({
   open,
   onOpenChange,
   development,
   lots,
+  nearbyPlaces,
+  nearbyTravelMode,
+  onNearbyTravelModeChange,
   highlightLotId,
   loading,
 }: {
@@ -20,6 +28,9 @@ export function LotMapDialog({
   onOpenChange: (o: boolean) => void;
   development: GeoMapDevelopment | null;
   lots: GeoMapLot[];
+  nearbyPlaces?: GeoMapNearbyPlace[];
+  nearbyTravelMode?: 'driving' | 'walking';
+  onNearbyTravelModeChange?: (m: 'driving' | 'walking') => void;
   highlightLotId?: string | null;
   loading?: boolean;
 }) {
@@ -35,6 +46,9 @@ export function LotMapDialog({
           <DevelopmentLotsMap
             development={development}
             lots={lots}
+            nearbyPlaces={nearbyPlaces ?? []}
+            nearbyTravelMode={nearbyTravelMode}
+            onNearbyTravelModeChange={onNearbyTravelModeChange}
             highlightLotId={highlightLotId}
             initialPresentation
             className="border-0 shadow-none"

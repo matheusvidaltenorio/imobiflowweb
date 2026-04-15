@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { UserPlus, Building2, Users, Map } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Card } from '@/components/ui/card';
+import { MetaSocialPanel } from '@/components/integrations/meta-social-panel';
 
 export default function AdminDashboardPage() {
   const { data, isLoading } = useQuery({
@@ -60,6 +61,10 @@ export default function AdminDashboardPage() {
           <p className="mt-2 max-w-2xl text-gray-600">
             Visão consolidada do marketplace. Acesse módulos para manter dados e equipe organizados.
           </p>
+
+          <div className="mt-8">
+            <MetaSocialPanel compact />
+          </div>
 
           {isLoading ? (
             <div className="mt-10 grid gap-4 md:grid-cols-4">

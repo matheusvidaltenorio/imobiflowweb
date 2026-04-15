@@ -180,6 +180,17 @@ enum AiImageJobStatus {
   FAILED
 }
 
+enum SocialProvider {
+  META_PAGE
+}
+
+enum SocialConnectionStatus {
+  ACTIVE
+  EXPIRED
+  REVOKED
+  ERROR
+}
+
 model User {
   id            String    @id @default(cuid())
   email         String    @unique
@@ -208,6 +219,7 @@ model User {
   aiMessageSuggestions AiMessageSuggestion[]
   instagramAdSuggestions InstagramAdSuggestion[]
   marketingCampaigns     MarketingCampaign[]
+  socialConnections      SocialConnection[]
 }
 
 model Property {
@@ -492,6 +504,7 @@ model CampaignPublicationTarget {
   externalPostId      String?                 @map("external_post_id")
   externalContainerId String?                 @map("external_container_id")
   publishError        String?                 @map("publish_error") @db.Text
+  rawResponseJson     Json?                   @map("raw_response_json")
   createdAt           DateTime                @default(now()) @map("created_at")
   updatedAt           DateTime                @updatedAt @map("updated_at")
 
@@ -499,6 +512,29 @@ model CampaignPublicationTarget {
 
   @@unique([campaignId, platform])
   @@map("campaign_publication_targets")
+}
+
+model SocialConnection {
+  id                 String                 @id @default(cuid())
+  userId             String                 @map("user_id")
+  provider           SocialProvider
+  accountLabel       String?                @map("account_label")
+  facebookPageId     String                 @map("facebook_page_id")
+  facebookPageName   String?                @map("facebook_page_name")
+  instagramUserId    String?                @map("instagram_user_id")
+  instagramUsername  String?                @map("instagram_username")
+  accessTokenEnc     String                 @map("access_token_enc") @db.Text
+  tokenExpiresAt     DateTime?              @map("token_expires_at")
+  status             SocialConnectionStatus @default(ACTIVE)
+  metadataJson       Json?                  @map("metadata_json")
+  createdAt          DateTime               @default(now()) @map("created_at")
+  updatedAt          DateTime               @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, facebookPageId])
+  @@index([userId])
+  @@map("social_connections")
 }
 
 model CampaignCopy {

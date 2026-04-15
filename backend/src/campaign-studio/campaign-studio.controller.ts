@@ -25,6 +25,7 @@ import { GenerateCampaignTextDto } from './dto/generate-campaign-text.dto';
 import { AddBankAssetsDto, PatchAssetDto } from './dto/campaign-assets.dto';
 import { GenerateAiImageDto, SuggestedImagePromptDto } from './dto/ai-image.dto';
 import { DuplicateCampaignDto } from './dto/duplicate-campaign.dto';
+import { PublishCampaignDto } from './dto/publish-campaign.dto';
 
 @Controller('campaign-studio')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -153,6 +154,25 @@ export class CampaignStudioController {
     @Body() dto: GenerateCampaignTextDto,
   ) {
     return this.studio.generateText(userId, role, id, dto);
+  }
+
+  @Post('campaigns/:id/publish')
+  publish(
+    @CurrentUser('id') userId: string,
+    @CurrentUser('role') role: UserRole,
+    @Param('id') id: string,
+    @Body() dto: PublishCampaignDto,
+  ) {
+    return this.studio.publish(userId, role, id, dto);
+  }
+
+  @Get('campaigns/:id/whatsapp')
+  whatsappPayload(
+    @CurrentUser('id') userId: string,
+    @CurrentUser('role') role: UserRole,
+    @Param('id') id: string,
+  ) {
+    return this.studio.whatsappPayload(userId, role, id);
   }
 
   @Get('campaigns/:id/export')

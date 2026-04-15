@@ -17,6 +17,10 @@ export class GeminiCampaignTextService {
     return !!this.config.get<string>('GEMINI_API_KEY')?.trim();
   }
 
+  private modelName(): string {
+    return this.config.get<string>('GEMINI_MODEL')?.trim() || 'gemini-2.0-flash';
+  }
+
   async refinePack(pack: InstagramAdPack): Promise<InstagramAdPack | null> {
     const key = this.config.get<string>('GEMINI_API_KEY')?.trim();
     if (!key) return null;
@@ -56,7 +60,7 @@ export class GeminiCampaignTextService {
 
     try {
       const genAI = new GoogleGenerativeAI(key);
-      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+      const model = genAI.getGenerativeModel({ model: this.modelName() });
       const result = await model.generateContent(prompt);
       const text = result.response.text();
       const parsedRaw = this.parseJsonResponse(text);

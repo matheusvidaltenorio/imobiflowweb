@@ -27,6 +27,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/dashboard/page-header';
+import { MetaSocialPanel } from '@/components/integrations/meta-social-panel';
 import { useAuth } from '@/lib/auth-context';
 import { cn } from '@/lib/utils';
 
@@ -324,6 +325,10 @@ export default function DashboardPage() {
             ))}
           </div>
         </Card>
+
+        <div className="mb-10">
+          <MetaSocialPanel compact />
+        </div>
 
         {isLoading ? (
           <div className="space-y-10">

@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import {
@@ -20,6 +21,11 @@ import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { buildCampaignCopyUpsertOperations } from './campaign-copy.mapper';
 import { CampaignPublisherService } from './campaign-publisher.service';
 import { CampaignExportService } from './campaign-export.service';
+import { InstagramPublisherService } from './instagram-publisher.service';
+import { FacebookPublisherService } from './facebook-publisher.service';
+import { WhatsAppDistributionService } from './whatsapp-distribution.service';
+import { MetaOAuthService } from '../social/meta-oauth.service';
+import type { PublishCampaignDto } from './dto/publish-campaign.dto';
 import type { CreateCampaignDto } from './dto/create-campaign.dto';
 import type { UpdateCampaignDto } from './dto/update-campaign.dto';
 import type { GenerateCampaignTextDto } from './dto/generate-campaign-text.dto';
@@ -42,6 +48,8 @@ const campaignDetailInclude = {
 
 @Injectable()
 export class CampaignStudioService {
+  private readonly logger = new Logger(CampaignStudioService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly instagramAds: InstagramAdsService,
@@ -49,6 +57,10 @@ export class CampaignStudioService {
     private readonly publisher: CampaignPublisherService,
     private readonly exportService: CampaignExportService,
     private readonly geminiText: GeminiCampaignTextService,
+    private readonly metaOAuth: MetaOAuthService,
+    private readonly instagramPublisher: InstagramPublisherService,
+    private readonly facebookPublisher: FacebookPublisherService,
+    private readonly whatsappDistribution: WhatsAppDistributionService,
     @Inject(CAMPAIGN_IMAGE_PROVIDER)
     private readonly imageProvider: ICampaignImageGenerationProvider,
   ) {}
@@ -175,7 +187,60 @@ export class CampaignStudioService {
       geminiConfigured: this.geminiText.isConfigured(),
       imageGenerationProvider: this.imageProvider.name,
       publishingNote: this.publisher.readinessNote(),
+      metaOAuthConfigured: this.metaOAuth.isConfigured(),
     };
+  }
+
+  async publish(userId: string, role: UserRole, campaignId: string, dto: PublishCampaignDto) {
+    await this.assertCampaignOwner(userId, role, campaignId);
+
+    if (dto.platform === 'WHATSAPP') {
+      throw new BadRequestException(
+        'WhatsApp não usa a API de feed. Use o fluxo assistido (link wa.me) no aplicativo.',
+      );
+    }
+    if (dto.platform === 'EXPORT_PACKAGE') {
+      throw new BadRequestException('O pacote de exportação não é “publicado”; use baixar JSON ou criativos no app.');
+    }
+    if (dto.platform === 'INSTAGRAM_STORY' || dto.platform === 'INSTAGRAM_REEL') {
+      return {
+        manual: true,
+        platform: dto.platform,
+        message:
+          'Story e Reel exigem vídeo ou fluxo específico no app Instagram. Use a pré-visualização e finalize manualmente no Instagram.',
+      };
+    }
+
+    const connectionId = dto.socialConnectionId?.trim();
+    if (!connectionId) {
+      throw new BadRequestException('Informe a conexão Meta (socialConnectionId) da página a publicar.');
+    }
+
+    if (dto.platform === 'INSTAGRAM_FEED') {
+      return this.instagramPublisher.publishFeed({
+        userId,
+        role,
+        campaignId,
+        socialConnectionId: connectionId,
+      });
+    }
+    if (dto.platform === 'FACEBOOK_POST') {
+      return this.facebookPublisher.publishPhotoPost({
+        userId,
+        role,
+        campaignId,
+        socialConnectionId: connectionId,
+      });
+    }
+
+    throw new BadRequestException('Plataforma não suportada para publicação automática.');
+  }
+
+  async whatsappPayload(userId: string, role: UserRole, campaignId: string) {
+    await this.assertCampaignOwner(userId, role, campaignId);
+    const payload = await this.whatsappDistribution.buildPayloadForCampaign(campaignId);
+    if (!payload) throw new NotFoundException('Campanha não encontrada');
+    return payload;
   }
 
   async list(userId: string, role: UserRole, developmentId?: string) {
@@ -451,68 +516,74 @@ export class CampaignStudioService {
   }
 
   async generateText(userId: string, role: UserRole, campaignId: string, dto: GenerateCampaignTextDto) {
-    const campaign = await this.assertCampaignOwner(userId, role, campaignId);
+    try {
+      const campaign = await this.assertCampaignOwner(userId, role, campaignId);
 
-    const genDto = {
-      contentType: dto.contentType,
-      objective: dto.objective,
-      tone: dto.tone,
-      leadId: dto.leadId,
-      save: dto.saveInstagramHistory === true,
-      regenerate: true,
-    };
+      const genDto = {
+        contentType: dto.contentType,
+        objective: dto.objective,
+        tone: dto.tone,
+        leadId: dto.leadId,
+        save: dto.saveInstagramHistory === true,
+        regenerate: true,
+      };
 
-    const generated = campaign.lotId
-      ? await this.instagramAds.generateForLot(userId, role, campaign.lotId, genDto)
-      : await this.instagramAds.generateForDevelopment(userId, role, campaign.developmentId, genDto);
+      const generated = campaign.lotId
+        ? await this.instagramAds.generateForLot(userId, role, campaign.lotId, genDto)
+        : await this.instagramAds.generateForDevelopment(userId, role, campaign.developmentId, genDto);
 
-    let finalPack: InstagramAdPack = generated.pack;
-    let geminiRefined = false;
-    if (dto.useGeminiLlm === true && this.geminiText.isConfigured()) {
-      const refined = await this.geminiText.refinePack(finalPack);
-      if (refined) {
-        finalPack = refined;
-        geminiRefined = true;
+      let finalPack: InstagramAdPack = generated.pack;
+      let geminiRefined = false;
+      if (dto.useGeminiLlm === true && this.geminiText.isConfigured()) {
+        const refined = await this.geminiText.refinePack(finalPack);
+        if (refined) {
+          finalPack = refined;
+          geminiRefined = true;
+        }
       }
-    }
 
-    const vIdx = dto.variationIndex ?? 0;
-    const platforms = campaign.targets.map((t) => t.platform);
-    const upserts = buildCampaignCopyUpsertOperations(
-      campaignId,
-      finalPack,
-      platforms,
-      vIdx,
-    );
+      const vIdx = dto.variationIndex ?? 0;
+      const platforms = campaign.targets.map((t) => t.platform);
+      const upserts = buildCampaignCopyUpsertOperations(
+        campaignId,
+        finalPack,
+        platforms,
+        vIdx,
+      );
 
-    await this.prisma.$transaction([
-      this.prisma.marketingCampaign.update({
-        where: { id: campaignId },
-        data: {
-          packJson: finalPack as unknown as Prisma.InputJsonValue,
-          lastGeneratedAt: new Date(),
-          ...(dto.objective != null ? { objective: dto.objective } : {}),
-          ...(dto.contentType != null ? { primaryContentType: dto.contentType } : {}),
-        },
-      }),
-      ...upserts.map((u) => this.prisma.campaignCopy.upsert(u)),
-      ...campaign.targets.map((t) =>
-        this.prisma.campaignPublicationTarget.update({
-          where: { id: t.id },
-          data: { status: PublicationTargetStatus.PREPARED },
+      await this.prisma.$transaction([
+        this.prisma.marketingCampaign.update({
+          where: { id: campaignId },
+          data: {
+            packJson: finalPack as unknown as Prisma.InputJsonValue,
+            lastGeneratedAt: new Date(),
+            ...(dto.objective != null ? { objective: dto.objective } : {}),
+            ...(dto.contentType != null ? { primaryContentType: dto.contentType } : {}),
+          },
         }),
-      ),
-    ]);
+        ...upserts.map((u) => this.prisma.campaignCopy.upsert(u)),
+        ...campaign.targets.map((t) =>
+          this.prisma.campaignPublicationTarget.update({
+            where: { id: t.id },
+            data: { status: PublicationTargetStatus.PREPARED },
+          }),
+        ),
+      ]);
 
-    return {
-      pack: finalPack,
-      publishing: generated.publishing,
-      savedInstagramSuggestionId: generated.savedId,
-      variationIndex: vIdx,
-      copiesSynced: upserts.length,
-      geminiRefined,
-      geminiAvailable: this.geminiText.isConfigured(),
-    };
+      return {
+        pack: finalPack,
+        publishing: generated.publishing,
+        savedInstagramSuggestionId: generated.savedId,
+        variationIndex: vIdx,
+        copiesSynced: upserts.length,
+        geminiRefined,
+        geminiAvailable: this.geminiText.isConfigured(),
+      };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      this.logger.error(`generateText falhou (campaign=${campaignId}): ${msg}`, e instanceof Error ? e.stack : undefined);
+      throw e;
+    }
   }
 
   async exportBundle(userId: string, role: UserRole, campaignId: string) {

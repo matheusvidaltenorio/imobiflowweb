@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { AxiosError } from 'axios';
 import { api } from '@/lib/api';
+import { redirectToMetaOAuthUrl } from '@/lib/meta-oauth-redirect';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -137,7 +138,7 @@ const STEPS = [
   { n: 2, label: 'Texto (IA)' },
   { n: 3, label: 'Imagens' },
   { n: 4, label: 'Pré-visualização' },
-  { n: 5, label: 'Exportar / WhatsApp' },
+  { n: 5, label: 'Publicar & enviar' },
 ] as const;
 
 export function CampaignStudioWizard({
@@ -173,6 +174,8 @@ export function CampaignStudioWizard({
   const [previewPlatform, setPreviewPlatform] = useState<string>('INSTAGRAM_FEED');
   const [useGeminiLlm, setUseGeminiLlm] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<Array<{ file: File; url: string }>>([]);
+  const [selectedSocialId, setSelectedSocialId] = useState('');
+  const [showAdvancedJson, setShowAdvancedJson] = useState(false);
 
   const { data: capabilities } = useQuery({
     queryKey: ['campaign-studio', 'capabilities'],
@@ -181,10 +184,32 @@ export function CampaignStudioWizard({
         geminiConfigured: boolean;
         imageGenerationProvider: string;
         publishingNote: string;
+        metaOAuthConfigured?: boolean;
       }>('/campaign-studio/capabilities');
       return data;
     },
   });
+
+  const { data: socialConnections } = useQuery({
+    queryKey: ['social', 'connections'],
+    queryFn: async () => {
+      const { data } = await api.get<
+        Array<{
+          id: string;
+          facebookPageName: string | null;
+          instagramUsername: string | null;
+          status: string;
+        }>
+      >('/social/connections');
+      return data;
+    },
+  });
+
+  useEffect(() => {
+    if (socialConnections?.length && !selectedSocialId) {
+      setSelectedSocialId(socialConnections[0].id);
+    }
+  }, [socialConnections, selectedSocialId]);
 
   const { data: campaignList } = useQuery({
     queryKey: ['campaign-studio', 'list', developmentId],
@@ -266,7 +291,11 @@ export function CampaignStudioWizard({
       await refetchCampaign();
       setStep(4);
     },
-    onError: () => toast({ title: 'Erro ao gerar texto', type: 'error' }),
+    onError: (err) =>
+      toast({
+        title: apiErrorMessage(err, 'Erro ao gerar texto'),
+        type: 'error',
+      }),
   });
 
   const addBank = useMutation({
@@ -388,6 +417,76 @@ export function CampaignStudioWizard({
     onError: () => toast({ title: 'Não foi possível duplicar', type: 'error' }),
   });
 
+  const connectMeta = useMutation({
+    mutationFn: async () => {
+      const { data } = await api.get<{ url: string }>('/social/meta/connect');
+      return data.url;
+    },
+    onSuccess: (url) => {
+      redirectToMetaOAuthUrl(url);
+    },
+    onError: (err) =>
+      toast({
+        title: 'Erro ao conectar com a Meta. Verifique configuração do app.',
+        description: apiErrorMessage(err, '').trim() || undefined,
+        type: 'error',
+      }),
+  });
+
+  const publishInstagram = useMutation({
+    mutationFn: async () => {
+      if (!campaignId) throw new Error('no campaign');
+      const { data } = await api.post<{
+        manual?: boolean;
+        message?: string;
+        externalPostId?: string;
+      }>(`/campaign-studio/campaigns/${campaignId}/publish`, {
+        platform: 'INSTAGRAM_FEED',
+        socialConnectionId: selectedSocialId,
+      });
+      return data;
+    },
+    onSuccess: async (data) => {
+      if (data?.manual) {
+        toast({ title: 'Ação manual', description: data.message, type: 'default' });
+      } else {
+        toast({ title: 'Publicado no Instagram', type: 'success' });
+      }
+      await refetchCampaign();
+      void qc.invalidateQueries({ queryKey: ['social', 'connections'] });
+    },
+    onError: (err) => toast({ title: apiErrorMessage(err, 'Erro ao publicar no Instagram'), type: 'error' }),
+  });
+
+  const publishFacebook = useMutation({
+    mutationFn: async () => {
+      if (!campaignId) throw new Error('no campaign');
+      const { data } = await api.post(`/campaign-studio/campaigns/${campaignId}/publish`, {
+        platform: 'FACEBOOK_POST',
+        socialConnectionId: selectedSocialId,
+      });
+      return data;
+    },
+    onSuccess: async () => {
+      toast({ title: 'Publicado no Facebook', type: 'success' });
+      await refetchCampaign();
+    },
+    onError: (err) => toast({ title: apiErrorMessage(err, 'Erro ao publicar no Facebook'), type: 'error' }),
+  });
+
+  const saveDraft = useMutation({
+    mutationFn: async () => {
+      if (!campaignId) return;
+      await api.patch(`/campaign-studio/campaigns/${campaignId}`, { status: 'DRAFT' });
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['campaign-studio', 'list', developmentId] });
+      toast({ title: 'Rascunho salvo', type: 'success' });
+      void refetchCampaign();
+    },
+    onError: () => toast({ title: 'Erro ao salvar rascunho', type: 'error' }),
+  });
+
   const copyText = useCallback(
     async (text: string) => {
       try {
@@ -411,7 +510,7 @@ export function CampaignStudioWizard({
       a.download = `campanha-${campaignId}.json`;
       a.click();
       URL.revokeObjectURL(url);
-      toast({ title: 'Pacote baixado', type: 'success' });
+      toast({ title: 'Pacote JSON baixado (avançado)', type: 'success' });
     } catch {
       toast({ title: 'Erro ao exportar', type: 'error' });
     }
@@ -462,6 +561,25 @@ export function CampaignStudioWizard({
   const primaryPreviewUrl =
     campaign?.assets.find((a) => a.isPrimary)?.url ?? campaign?.assets[0]?.url ?? null;
 
+  const hasIgTarget = useMemo(
+    () => campaign?.targets?.some((t) => t.platform === 'INSTAGRAM_FEED') ?? false,
+    [campaign?.targets],
+  );
+  const hasFbTarget = useMemo(
+    () => campaign?.targets?.some((t) => t.platform === 'FACEBOOK_POST') ?? false,
+    [campaign?.targets],
+  );
+
+  const downloadPrimaryImage = useCallback(() => {
+    const url = primaryPreviewUrl;
+    if (!url) {
+      toast({ title: 'Adicione uma imagem à campanha antes de baixar', type: 'error' });
+      return;
+    }
+    window.open(url, '_blank', 'noopener,noreferrer');
+    toast({ title: 'Abrimos a imagem em nova aba — use “Salvar como” no navegador', type: 'success' });
+  }, [primaryPreviewUrl, toast]);
+
   const previewPlatformOptions = useMemo(() => {
     const sel = PLATFORMS.filter((p) => selectedPlatforms.includes(p.id));
     if (sel.length) return sel;
@@ -479,9 +597,12 @@ export function CampaignStudioWizard({
             {title ?? 'Estúdio de divulgação (campanha)'}
           </h2>
           <p className="text-sm text-gray-600">
-            Gere texto, una imagens do sistema, upload e (opcional) IA visual — depois pré-visualize e exporte.
-            Publicação automática nas redes ainda não está ativa; use copiar/baixar.
+            Gere texto com IA, escolha imagens do banco, faça upload ou gere com IA — pré-visualize e publique no
+            Instagram/Facebook quando a Meta estiver conectada, ou use WhatsApp e download assistidos.
           </p>
+          {capabilities?.publishingNote ? (
+            <p className="mt-2 text-xs text-slate-600">{capabilities.publishingNote}</p>
+          ) : null}
         </div>
       </div>
 
@@ -990,11 +1111,82 @@ export function CampaignStudioWizard({
       ) : null}
 
       {step === 5 && campaignId ? (
-        <div className="space-y-4">
-          <p className="text-sm text-gray-700">
-            <strong>Modo manual:</strong> copie textos, baixe o pacote JSON ou envie ao WhatsApp. Integração direta com
-            Instagram/Facebook fica para uma etapa futura (tokens e revisão de políticas).
-          </p>
+        <div className="space-y-6">
+          <div className="rounded-xl border border-primary-100 bg-white p-4 shadow-sm">
+            <p className="text-sm font-semibold text-primary-950">Conexão Meta (Instagram &amp; Facebook)</p>
+            <p className="mt-1 text-xs text-slate-600">
+              Conecte a página do Facebook com Instagram Business para publicar o feed e posts sem copiar JSON.
+            </p>
+            {capabilities?.metaOAuthConfigured === false ? (
+              <p className="mt-2 text-xs text-amber-800">
+                O servidor ainda não tem META_APP_ID / META_APP_SECRET / META_OAUTH_REDIRECT_URI — peça ao administrador
+                para configurar.
+              </p>
+            ) : null}
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                disabled={connectMeta.isPending || capabilities?.metaOAuthConfigured === false}
+                onClick={() => connectMeta.mutate()}
+              >
+                {connectMeta.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ExternalLink className="h-3.5 w-3.5" />}
+                Conectar ou atualizar Meta
+              </Button>
+              {(socialConnections?.length ?? 0) > 0 ? (
+                <label className="flex items-center gap-2 text-sm text-slate-700">
+                  <span className="text-xs font-medium text-slate-500">Página para publicar</span>
+                  <select
+                    className="h-9 max-w-[220px] rounded-lg border border-slate-200 bg-white px-2 text-xs"
+                    value={selectedSocialId}
+                    onChange={(e) => setSelectedSocialId(e.target.value)}
+                  >
+                    {(socialConnections ?? []).map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.facebookPageName ?? 'Página'}
+                        {s.instagramUsername ? ` · @${s.instagramUsername}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : (
+                <span className="text-xs text-slate-500">Nenhuma página conectada ainda.</span>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <p className="mb-2 text-sm font-semibold text-primary-900">Publicar nas redes</p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="brand"
+                className="gap-2"
+                disabled={publishInstagram.isPending || !selectedSocialId || !hasIgTarget}
+                onClick={() => publishInstagram.mutate()}
+              >
+                {publishInstagram.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                Publicar no Instagram (feed)
+              </Button>
+              <Button
+                type="button"
+                variant="brand"
+                className="gap-2"
+                disabled={publishFacebook.isPending || !selectedSocialId || !hasFbTarget}
+                onClick={() => publishFacebook.mutate()}
+              >
+                {publishFacebook.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                Publicar no Facebook
+              </Button>
+            </div>
+            <p className="mt-2 text-[11px] text-slate-500">
+              Requer imagem de capa e texto gerado para o canal. Story e Reel continuam com fluxo manual no app
+              Instagram.
+            </p>
+          </div>
+
           <WhatsAppActionHint />
           <div className="flex flex-wrap gap-2">
             <Button
@@ -1005,7 +1197,7 @@ export function CampaignStudioWizard({
               onClick={() => window.open(whatsappWaUrl, '_blank', 'noopener,noreferrer')}
             >
               <ExternalLink className="h-4 w-4" />
-              Enviar para WhatsApp
+              Enviar no WhatsApp
             </Button>
             <Button
               type="button"
@@ -1015,19 +1207,73 @@ export function CampaignStudioWizard({
               onClick={() => copyText(whatsappCaption)}
             >
               <Copy className="h-4 w-4" />
-              Copiar mensagem WhatsApp
+              Copiar legenda / mensagem
             </Button>
-            <Button type="button" variant="brand" className="gap-2" onClick={() => downloadExport()}>
+            <Button type="button" variant="outline" className="gap-2" onClick={() => downloadPrimaryImage()}>
               <Download className="h-4 w-4" />
-              Baixar pacote (JSON)
+              Baixar criativo (imagem)
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="gap-2"
+              disabled={saveDraft.isPending}
+              onClick={() => saveDraft.mutate()}
+            >
+              {saveDraft.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Salvar rascunho
             </Button>
             <Button type="button" variant="outline" className="gap-2" onClick={() => markReady.mutate()}>
               Marcar como pronta
             </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="gap-2"
+              disabled={duplicateCampaign.isPending}
+              onClick={() => duplicateCampaign.mutate()}
+            >
+              Duplicar campanha
+            </Button>
           </div>
+
+          {campaign?.targets?.length ? (
+            <div className="rounded-lg border border-slate-100 bg-slate-50/80 p-3 text-xs text-slate-700">
+              <p className="font-semibold text-slate-800">Status por plataforma</p>
+              <ul className="mt-2 space-y-1">
+                {campaign.targets.map((t) => (
+                  <li key={t.platform}>
+                    <span className="font-medium">{t.platform}</span>: {t.status}
+                    {t.aspectHint ? ` · ${t.aspectHint}` : ''}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          <div className="border-t border-slate-100 pt-4">
+            <button
+              type="button"
+              className="text-xs font-medium text-slate-500 underline-offset-2 hover:underline"
+              onClick={() => setShowAdvancedJson((v) => !v)}
+            >
+              {showAdvancedJson ? 'Ocultar' : 'Avançado'}: exportar JSON interno
+            </button>
+            {showAdvancedJson ? (
+              <div className="mt-2">
+                <Button type="button" variant="outline" size="sm" className="gap-2" onClick={() => downloadExport()}>
+                  <Download className="h-4 w-4" />
+                  Baixar pacote JSON
+                </Button>
+                <p className="mt-2 text-[11px] text-slate-500">
+                  Uso técnico ou integrações; o fluxo principal é publicar e enviar pelos botões acima.
+                </p>
+              </div>
+            ) : null}
+          </div>
+
           <p className="text-xs text-gray-500">
-            ID da campanha: {campaignId} · Status alvo nas redes: <code className="rounded bg-slate-100 px-1">EXPORT_PENDING</code> até
-            existir integração oficial.
+            ID da campanha: <code className="rounded bg-slate-100 px-1">{campaignId}</code>
           </p>
         </div>
       ) : null}

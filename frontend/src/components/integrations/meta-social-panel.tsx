@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
-import { ExternalLink, Loader2, Plug } from 'lucide-react';
+import { ExternalLink, Loader2, Plug, Unlink } from 'lucide-react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { redirectToMetaOAuthUrl } from '@/lib/meta-oauth-redirect';
@@ -19,6 +19,9 @@ type SocialConnectionRow = {
   instagramUsername: string | null;
   status: string;
   tokenExpiresAt: string | null;
+  isDefault?: boolean;
+  hasInstagramBusiness?: boolean;
+  lastError?: string | null;
 };
 
 function apiErrorMessage(err: unknown, fallback: string): string {
@@ -60,9 +63,40 @@ export function MetaSocialPanel({ compact = false }: Props) {
   const { data: connections, isLoading: connLoading } = useQuery({
     queryKey: ['social', 'connections'],
     queryFn: async () => {
-      const { data } = await api.get<SocialConnectionRow[]>('/social/connections');
+      const { data } = await api.get<SocialConnectionRow[]>('/social/meta/pages');
       return data;
     },
+  });
+
+  const selectDefault = useMutation({
+    mutationFn: async (connectionId: string) => {
+      const { data } = await api.post<SocialConnectionRow[]>('/social/meta/select-page', { connectionId });
+      return data;
+    },
+    onSuccess: () => {
+      toast({ title: 'Página padrão para publicação atualizada', type: 'success' });
+      void qc.invalidateQueries({ queryKey: ['social', 'connections'] });
+    },
+    onError: (err) =>
+      toast({
+        title: apiErrorMessage(err, 'Não foi possível definir a página padrão'),
+        type: 'error',
+      }),
+  });
+
+  const disconnect = useMutation({
+    mutationFn: async (connectionId: string) => {
+      await api.post('/social/meta/disconnect', { connectionId });
+    },
+    onSuccess: () => {
+      toast({ title: 'Página desconectada do ImobiFlow', type: 'success' });
+      void qc.invalidateQueries({ queryKey: ['social', 'connections'] });
+    },
+    onError: (err) =>
+      toast({
+        title: apiErrorMessage(err, 'Não foi possível desconectar'),
+        type: 'error',
+      }),
   });
 
   const onConnectError = (err: unknown) => {
@@ -104,7 +138,7 @@ export function MetaSocialPanel({ compact = false }: Props) {
     : !serverReady
       ? 'Servidor sem META_APP_ID / META_APP_SECRET / META_OAUTH_REDIRECT_URI — peça ao administrador.'
       : hasConnections
-        ? `${connections!.length} página(s) do Facebook conectada(s) para publicação.`
+        ? `${connections!.length} página(s) do Facebook sincronizada(s). Escolha a página padrão para publicar pelo sistema.`
         : 'Nenhuma página conectada ainda. Comece pela conexão básica; use permissões estendidas para publicar no feed.';
 
   if (compact) {
@@ -182,7 +216,7 @@ export function MetaSocialPanel({ compact = false }: Props) {
           onClick={() => connectBasic.mutate()}
         >
           {connectBasic.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
-          Conectar ou atualizar Meta
+          Conectar Facebook / Instagram
         </Button>
         <Button
           type="button"
@@ -206,25 +240,84 @@ export function MetaSocialPanel({ compact = false }: Props) {
 
       {hasConnections && connections ? (
         <div className="mt-6 border-t border-slate-100 pt-4">
-          <p className="mb-2 text-sm font-semibold text-primary-900">Conexões ativas</p>
-          <ul className="space-y-2">
-            {connections.map((c) => (
-              <li
-                key={c.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2 text-sm"
-              >
-                <span className="font-medium text-slate-900">{c.facebookPageName ?? 'Página'}</span>
-                <span className="text-xs text-slate-600">
-                  {c.instagramUsername ? `@${c.instagramUsername}` : 'Instagram não vinculado'}
-                  {' · '}
-                  {c.status}
-                </span>
-              </li>
-            ))}
+          <p className="mb-2 text-sm font-semibold text-primary-900">Páginas conectadas</p>
+          <ul className="space-y-3">
+            {connections.map((c) => {
+              const igOk = c.hasInstagramBusiness ?? !!c.instagramUsername;
+              return (
+                <li
+                  key={c.id}
+                  className="rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-3 text-sm"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-medium text-slate-900">{c.facebookPageName ?? 'Página'}</span>
+                        {c.isDefault ? (
+                          <span className="rounded-full bg-primary-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary-900">
+                            Padrão
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="mt-1 text-xs text-slate-600">
+                        {igOk ? (
+                          <>
+                            Instagram Business: <span className="font-medium">@{c.instagramUsername}</span>
+                          </>
+                        ) : (
+                          <span className="text-amber-900">
+                            Sem Instagram Business nesta página — publicação no feed do Facebook disponível; Instagram
+                            bloqueado até vincular no Meta Business Suite.
+                          </span>
+                        )}
+                      </p>
+                      {c.lastError ? (
+                        <p className="mt-1 text-xs text-red-800">Último aviso: {c.lastError}</p>
+                      ) : null}
+                      <p className="mt-1 text-[11px] text-slate-500">Estado: {c.status}</p>
+                    </div>
+                    <div className="flex flex-shrink-0 flex-col gap-1.5 sm:items-end">
+                      {!c.isDefault ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-8 text-xs"
+                          disabled={selectDefault.isPending}
+                          onClick={() => selectDefault.mutate(c.id)}
+                        >
+                          {selectDefault.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                          Usar como padrão
+                        </Button>
+                      ) : null}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 gap-1 text-xs text-red-700 hover:bg-red-50 hover:text-red-800"
+                        disabled={disconnect.isPending}
+                        onClick={() => {
+                          if (
+                            typeof window !== 'undefined' &&
+                            !window.confirm('Remover esta página do ImobiFlow? Você poderá conectar de novo depois.')
+                          ) {
+                            return;
+                          }
+                          disconnect.mutate(c.id);
+                        }}
+                      >
+                        {disconnect.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Unlink className="h-3 w-3" />}
+                        Desconectar
+                      </Button>
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
           <p className="mt-3 text-xs text-slate-500">
-            Após autorizar na Meta, você é redirecionado ao centro de publicação. As conexões aparecem aqui
-            automaticamente.
+            Após autorizar na Meta, você volta ao centro de publicação com um aviso de sucesso. A página marcada como
+            padrão é usada ao publicar campanhas se você não escolher outra.
           </p>
           <Button
             type="button"

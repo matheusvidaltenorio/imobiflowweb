@@ -1,10 +1,12 @@
 import {
   BadRequestException,
+  Body,
   Controller,
   Delete,
   Get,
   Logger,
   Param,
+  Post,
   Query,
   Res,
   UseGuards,
@@ -20,6 +22,9 @@ import { Public } from '../common/decorators/public.decorator';
 import type { MetaOAuthScopeMode } from './meta-oauth.scopes';
 import { MetaOAuthService } from './meta-oauth.service';
 import { SocialConnectionService } from './social-connection.service';
+import { SocialIntegrationLogService } from './social-integration-log.service';
+import { SelectMetaPageDto } from './dto/select-meta-page.dto';
+import { MetaDisconnectDto } from './dto/meta-disconnect.dto';
 
 @Controller('social')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -29,6 +34,7 @@ export class SocialController {
   constructor(
     private readonly metaOAuth: MetaOAuthService,
     private readonly connections: SocialConnectionService,
+    private readonly integrationLog: SocialIntegrationLogService,
     private readonly config: ConfigService,
   ) {}
 
@@ -54,6 +60,37 @@ export class SocialController {
   }
 
   /**
+   * Páginas Facebook já sincronizadas após OAuth (tokens no servidor; sem segredos na resposta).
+   * Alias semântico de GET /social/connections.
+   */
+  @Get('meta/pages')
+  @Roles(UserRole.CORRETOR, UserRole.ADMIN)
+  listMetaPages(@CurrentUser('id') userId: string, @CurrentUser('role') role: UserRole) {
+    return this.connections.list(userId, role);
+  }
+
+  @Post('meta/select-page')
+  @Roles(UserRole.CORRETOR, UserRole.ADMIN)
+  selectMetaPage(
+    @CurrentUser('id') userId: string,
+    @CurrentUser('role') role: UserRole,
+    @Body() body: SelectMetaPageDto,
+  ) {
+    return this.connections.setDefaultConnection(userId, role, body.connectionId);
+  }
+
+  /** Desconecta uma página (mesmo efeito de DELETE /social/connections/:id). */
+  @Post('meta/disconnect')
+  @Roles(UserRole.CORRETOR, UserRole.ADMIN)
+  disconnectMeta(
+    @CurrentUser('id') userId: string,
+    @CurrentUser('role') role: UserRole,
+    @Body() body: MetaDisconnectDto,
+  ) {
+    return this.connections.delete(userId, role, body.connectionId);
+  }
+
+  /**
    * Inicia OAuth. Escopos:
    * - padrão: minimal (public_profile, email, pages_show_list)
    * - ?scope=extended ou ?scope=full: inclui publicação Instagram/Facebook
@@ -65,7 +102,7 @@ export class SocialController {
         'Integração Meta não configurada no servidor (META_APP_ID / META_APP_SECRET / META_OAUTH_REDIRECT_URI).',
       );
     }
-    const state = this.metaOAuth.createState(userId);
+    const state = this.metaOAuth.createState(userId, requestMode);
     const { url, scopes: scopesStr } = this.metaOAuth.buildAuthorizeUrl(state, requestMode);
     const scopeModeLabel: 'minimal' | 'extended' =
       requestMode === 'extended' || scopesStr.includes('instagram_content_publish')
@@ -145,7 +182,16 @@ export class SocialController {
     }
 
     try {
-      const { uid } = this.metaOAuth.parseState(state);
+      const statePayload = this.metaOAuth.parseState(state);
+      const { uid } = statePayload;
+      const scopeModeForScopes =
+        statePayload.scopeMode === 'extended'
+          ? 'extended'
+          : statePayload.scopeMode === 'minimal'
+            ? 'minimal'
+            : null;
+      const grantedScopes = this.metaOAuth.resolveScopesString(scopeModeForScopes);
+
       const short = await this.metaOAuth.exchangeCodeForShortLivedToken(code);
       const long = await this.metaOAuth.exchangeForLongLivedUserToken(short.access_token);
       const pages = await this.metaOAuth.listManagedPages(long.access_token);
@@ -159,8 +205,18 @@ export class SocialController {
           instagramUsername: p.instagram_business_account?.username ?? null,
           pageAccessToken: p.access_token,
           expiresAt,
+          grantedScopes,
         });
       }
+      await this.connections.ensureDefaultIfSingle(uid);
+      await this.integrationLog.log({
+        userId: uid,
+        action: 'META_OAUTH_CONNECTED',
+        channel: 'META',
+        status: 'SUCCESS',
+        message: `${pages.length} página(s) sincronizada(s).`,
+        metadataJson: { pageCount: pages.length },
+      });
       return this.redirectPublication(res, {
         meta_connected: '1',
         pages: String(pages.length),
@@ -187,6 +243,22 @@ export class SocialController {
         codeKey = 'scopes';
         msg =
           'Faltam permissões para listar páginas. Use “Conectar com permissões para publicar” ou adicione escopos no app Meta.';
+      }
+
+      try {
+        if (state) {
+          const { uid } = this.metaOAuth.parseState(state);
+          await this.integrationLog.log({
+            userId: uid,
+            action: 'META_OAUTH_FAILED',
+            channel: 'META',
+            status: 'FAILED',
+            message: msg.slice(0, 2000),
+            metadataJson: { codeKey },
+          });
+        }
+      } catch {
+        /* state inválido: sem userId para auditoria */
       }
 
       return this.redirectPublication(res, {

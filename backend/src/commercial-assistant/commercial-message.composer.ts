@@ -49,12 +49,12 @@ function applyTemplate(tpl: string, ctx: CommercialMessageContext): string {
 
 /** Escolhe o tipo principal de abordagem com base no funil, ranking e visitas. */
 export function decidePrimaryType(ctx: CommercialMessageContext): CommercialMessageType {
-  const st = ctx.lead?.status ?? 'PROSPECCAO';
+  const st = ctx.lead?.status ?? 'NOVO_LEAD';
   const days = ctx.lead?.daysSinceLastInteraction ?? 0;
   const lot = ctx.lot;
   const cs = ctx.lead?.closingScore;
 
-  if (cs != null && cs >= 78 && st === 'NEGOCIACAO') {
+  if (cs != null && cs >= 78 && (st === 'PROPOSTA_ENVIADA' || st === 'RESERVADO')) {
     return 'NEGOCIACAO';
   }
   if (cs != null && cs <= 34 && days >= 5) {
@@ -65,10 +65,10 @@ export function decidePrimaryType(ctx: CommercialMessageContext): CommercialMess
   }
 
   if (ctx.hasUpcomingVisit) return 'VISITA';
-  if (ctx.hadRecentCompletedVisit && (st === 'QUALIFICACAO' || st === 'NEGOCIACAO')) {
+  if (ctx.hadRecentCompletedVisit && (st === 'EM_ATENDIMENTO' || st === 'PROPOSTA_ENVIADA' || st === 'VISITA_AGENDADA')) {
     return 'POS_VISITA';
   }
-  if (st === 'NEGOCIACAO') return 'NEGOCIACAO';
+  if (st === 'PROPOSTA_ENVIADA' || st === 'RESERVADO') return 'NEGOCIACAO';
   if (lot?.tags.includes('NECESITA_ATENCAO_COMERCIAL') && days >= 4) {
     return 'REATIVACAO_ENCALHADO';
   }
@@ -85,8 +85,8 @@ export function decidePrimaryType(ctx: CommercialMessageContext): CommercialMess
   ) {
     return 'URGENCIA';
   }
-  if (st === 'PROSPECCAO') return 'PRIMEIRO_CONTATO';
-  if (st === 'QUALIFICACAO') return 'VISITA';
+  if (st === 'NOVO_LEAD') return 'PRIMEIRO_CONTATO';
+  if (st === 'EM_ATENDIMENTO' || st === 'VISITA_AGENDADA') return 'VISITA';
   return 'FOLLOW_UP';
 }
 

@@ -13,6 +13,11 @@ export class BankImageItemDto {
   @IsOptional()
   @IsString()
   fileName?: string;
+
+  /** ID da `PropertyImage` de origem (galeria do imóvel), quando aplicável. */
+  @IsOptional()
+  @IsString()
+  sourcePropertyImageId?: string;
 }
 
 export class AddBankAssetsDto {

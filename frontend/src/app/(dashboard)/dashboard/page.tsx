@@ -123,6 +123,7 @@ type DashboardData = {
   clientsCount?: number;
   lotsAvailable?: number;
   lotsReserved?: number;
+  lotsInNegotiation?: number;
   lotsSold?: number;
   leadsByStage?: Array<{ status: string; count: number }>;
   conversionRate?: number;
@@ -220,6 +221,14 @@ export default function DashboardPage() {
       icon: Layers,
       border: 'border-l-warning-500',
       bg: 'bg-warning-50/80',
+    },
+    {
+      label: 'Em negociação',
+      value: data?.lotsInNegotiation ?? 0,
+      href: '/lots',
+      icon: Layers,
+      border: 'border-l-sky-500',
+      bg: 'bg-sky-50/80',
     },
     {
       label: 'Vendidos',

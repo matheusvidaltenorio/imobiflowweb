@@ -25,13 +25,18 @@ enum PropertyStatus {
   DISPONIVEL
   VENDIDO
   RESERVADO
+  /// Em negociação comercial (pipeline de loteamento)
+  EM_NEGOCIACAO
   INDISPONIVEL
 }
 
+/// Pipeline comercial CRM (loteamentos): ordem sugerida no funil.
 enum LeadStatus {
-  PROSPECCAO
-  QUALIFICACAO
-  NEGOCIACAO
+  NOVO_LEAD
+  EM_ATENDIMENTO
+  VISITA_AGENDADA
+  PROPOSTA_ENVIADA
+  RESERVADO
   VENDIDO
   PERDIDO
 }
@@ -140,7 +145,31 @@ enum InstagramAdObjective {
 enum MarketingCampaignStatus {
   DRAFT
   READY
+  SCHEDULED
+  QUEUED
+  PROCESSING
+  PUBLISHED
+  FAILED
+  RETRYING
+  CANCELED
   ARCHIVED
+}
+
+/// Tipo comercial da campanha (camada de produto; independente do motor de anúncios Instagram).
+enum MarketingCampaignKind {
+  LOTEMENTO
+  LOTE
+  INSTITUCIONAL
+  PROMOCAO
+  REENGAJAMENTO
+}
+
+/// Objetivo comercial declarado (planejamento / relatórios).
+enum CommercialObjective {
+  GERAR_LEADS
+  GERAR_VISITAS
+  DIVULGAR_LOTES
+  FORTALECER_MARCA
 }
 
 enum CampaignAssetKind {
@@ -220,6 +249,8 @@ model User {
   instagramAdSuggestions InstagramAdSuggestion[]
   marketingCampaigns     MarketingCampaign[]
   socialConnections      SocialConnection[]
+  socialIntegrationLogs  SocialIntegrationLog[]
+  campaignPublicationOpLogs CampaignPublicationOpLog[]
 }
 
 model Property {
@@ -274,6 +305,8 @@ model PropertyImage {
   createdAt   DateTime @default(now())
 
   property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  /// Referências em campanhas (não remove a imagem da galeria do imóvel).
+  campaignAssetRefs CampaignAsset[] @relation("CampaignAssetSourceImage")
 
   @@index([propertyId])
 }
@@ -313,6 +346,7 @@ model Development {
 
   properties  Property[]
   blocks      Block[]
+  leads       Lead[]
   instagramAdSuggestions InstagramAdSuggestion[]
   marketingCampaigns     MarketingCampaign[]
   nearbyPlaces DevelopmentNearbyPlace[]
@@ -358,6 +392,7 @@ model Block {
 
   development    Development @relation(fields: [developmentId], references: [id], onDelete: Cascade)
   lots           Lot[]
+  marketingCampaigns MarketingCampaign[]
 
   @@index([developmentId])
 }
@@ -449,30 +484,92 @@ model InstagramAdSuggestion {
 model MarketingCampaign {
   id                 String                   @id @default(cuid())
   userId             String                   @map("user_id")
-  developmentId      String                   @map("development_id")
+  /// Opcional para campanhas institucionais / marca sem empreendimento fixo.
+  developmentId      String?                  @map("development_id")
   lotId              String?                  @map("lot_id")
+  /// Escopo por quadra (divulgação de faixa de lotes), quando aplicável.
+  blockId            String?                  @map("block_id")
   title              String
+  /// Motor legado de anúncios Instagram (mantido para compatibilidade com geração existente).
   objective          InstagramAdObjective     @default(AUTO)
+  campaignKind       MarketingCampaignKind    @default(LOTEMENTO) @map("campaign_kind")
+  commercialObjective CommercialObjective?    @map("commercial_objective")
+  /// Descrição interna (time comercial; não é legenda pública).
+  internalDescription String?                 @map("internal_description") @db.Text
+  /// Público-alvo / persona (planejamento).
+  audienceNotes      String?                  @map("audience_notes") @db.Text
+  /// Legenda principal unificada (espelhada nas cópias ao aplicar templates).
+  primaryCaption     String?                  @map("primary_caption") @db.Text
   status             MarketingCampaignStatus  @default(DRAFT)
   primaryContentType InstagramContentType     @default(FEED) @map("primary_content_type")
   packJson           Json?                    @map("pack_json")
   lastGeneratedAt    DateTime?                @map("last_generated_at")
+  /// Agendamento desejado (publicação futura; integração Meta usará alvos/cópias).
+  scheduledPublishAt DateTime?                @map("scheduled_publish_at")
+  /// IANA timezone (ex.: America/Sao_Paulo) para exibição e regras de agenda.
+  scheduleTimezone   String?                  @default("America/Sao_Paulo") @map("schedule_timezone")
+  /// Canais a publicar automaticamente (JSON array de PublicationPlatform, ex.: ["INSTAGRAM_FEED","FACEBOOK_POST"]).
+  scheduledChannelsJson Json?               @map("scheduled_channels_json")
+  /// Conexão Meta opcional para o agendamento (usa padrão do usuário se null).
+  scheduledSocialConnectionId String?        @map("scheduled_social_connection_id")
+  autoRetryEnabled   Boolean                  @default(true) @map("auto_retry_enabled")
+  retryCount         Int                      @default(0) @map("retry_count")
+  maxRetries         Int                      @default(3) @map("max_retries")
+  lastPublishAttemptAt DateTime?             @map("last_publish_attempt_at")
+  nextRetryAt        DateTime?                @map("next_retry_at")
+  campaignPublishedAt DateTime?             @map("campaign_published_at")
+  publishFailureReason String?               @map("publish_failure_reason") @db.Text
+  /// Evita processamento paralelo do mesmo job (worker).
+  publicationLockUntil DateTime?             @map("publication_lock_until")
   createdAt          DateTime                 @default(now()) @map("created_at")
   updatedAt          DateTime                 @updatedAt @map("updated_at")
 
   user         User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  development  Development                 @relation(fields: [developmentId], references: [id], onDelete: Cascade)
+  development  Development?                @relation(fields: [developmentId], references: [id], onDelete: Cascade)
   lot          Lot?                        @relation(fields: [lotId], references: [id], onDelete: SetNull)
+  block        Block?                      @relation(fields: [blockId], references: [id], onDelete: SetNull)
   assets       CampaignAsset[]
   targets      CampaignPublicationTarget[]
   copies       CampaignCopy[]
   aiImageJobs  AiImageGenerationJob[]
+  publicationOpLogs CampaignPublicationOpLog[]
+  leads             Lead[]
 
   @@index([userId])
   @@index([developmentId])
   @@index([lotId])
+  @@index([blockId])
+  @@index([status])
+  @@index([campaignKind])
   @@index([createdAt])
+  @@index([scheduledPublishAt])
+  @@index([nextRetryAt])
+  @@index([status, scheduledPublishAt])
   @@map("marketing_campaigns")
+}
+
+/// Histórico operacional de agendamento e publicação (sem segredos).
+model CampaignPublicationOpLog {
+  id               String   @id @default(cuid())
+  campaignId       String   @map("campaign_id")
+  /// Dono da campanha (contexto); pode ser null em jobs legados.
+  userId           String?  @map("user_id")
+  action           String
+  channel          String?
+  status           String
+  message          String?  @db.Text
+  externalPostId   String?  @map("external_post_id")
+  attemptNumber    Int      @default(0) @map("attempt_number")
+  executedByUserId String?  @map("executed_by_user_id")
+  metadataJson     Json?    @map("metadata_json")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  campaign MarketingCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  user     User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([campaignId])
+  @@index([createdAt])
+  @@map("campaign_publication_op_logs")
 }
 
 model CampaignAsset {
@@ -486,11 +583,15 @@ model CampaignAsset {
   mimeType   String?             @map("mime_type")
   isPrimary  Boolean             @default(false) @map("is_primary")
   sortOrder  Int                 @default(0) @map("sort_order")
+  /// Imagem de origem na galeria do imóvel (referência; não apaga PropertyImage).
+  sourcePropertyImageId String?  @map("source_property_image_id")
   createdAt  DateTime            @default(now()) @map("created_at")
 
   campaign MarketingCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  sourcePropertyImage PropertyImage? @relation("CampaignAssetSourceImage", fields: [sourcePropertyImageId], references: [id], onDelete: SetNull)
 
   @@index([campaignId])
+  @@index([sourcePropertyImageId])
   @@map("campaign_assets")
 }
 
@@ -527,14 +628,47 @@ model SocialConnection {
   tokenExpiresAt     DateTime?              @map("token_expires_at")
   status             SocialConnectionStatus @default(ACTIVE)
   metadataJson       Json?                  @map("metadata_json")
+  /// Última sincronização bem-sucedida com a Graph (OAuth / refresh).
+  lastSyncAt         DateTime?              @map("last_sync_at")
+  /// Último erro amigável (não expor token).
+  lastError          String?                @map("last_error") @db.Text
+  /// Escopos concedidos na última autorização (string separada por vírgula).
+  grantedScopes      String?                @map("granted_scopes") @db.Text
+  /// Página usada por padrão ao publicar (uma por usuário recomendada).
+  isDefault          Boolean                @default(false) @map("is_default")
   createdAt          DateTime               @default(now()) @map("created_at")
   updatedAt          DateTime               @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  logs SocialIntegrationLog[]
 
   @@unique([userId, facebookPageId])
   @@index([userId])
+  @@index([userId, isDefault])
   @@map("social_connections")
+}
+
+/// Histórico de integração Meta (auditoria; sem segredos).
+model SocialIntegrationLog {
+  id                 String   @id @default(cuid())
+  userId             String   @map("user_id")
+  action             String
+  channel            String?
+  campaignId         String?  @map("campaign_id")
+  socialConnectionId String?  @map("social_connection_id")
+  status             String
+  message            String?  @db.Text
+  externalId         String?  @map("external_id")
+  metadataJson       Json?    @map("metadata_json")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  user               User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  socialConnection   SocialConnection? @relation(fields: [socialConnectionId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([campaignId])
+  @@index([createdAt])
+  @@map("social_integration_logs")
 }
 
 model CampaignCopy {
@@ -645,6 +779,8 @@ model Lead {
   id               String     @id @default(cuid())
   propertyId       String?
   lotId            String?
+  /// Interesse no loteamento (quando ainda sem lote específico).
+  developmentId    String?    @map("development_id")
   userId           String?
   clientId         String?
   name             String
@@ -654,10 +790,16 @@ model Lead {
   notes            String?
   source           String?
   leadSource       String?
-  status           LeadStatus @default(PROSPECCAO)
+  status           LeadStatus @default(NOVO_LEAD)
+  /// Próximo follow-up comercial (retorno agendado).
+  nextFollowUpAt   DateTime?  @map("next_follow_up_at")
+  /// Motivo registrado ao marcar como PERDIDO.
+  lostReason       String?    @map("lost_reason") @db.Text
   isHot            Boolean    @default(false)
   interactionCount Int        @default(0)
   leadLastInteractionAt DateTime?
+  /// Campanha de marketing que originou o lead (atribuição para analytics).
+  marketingCampaignId String? @map("marketing_campaign_id")
   closingScore            Decimal?  @db.Decimal(5, 2)
   closingPrediction       String?
   closingReason           String?   @db.Text
@@ -673,8 +815,10 @@ model Lead {
 
   property     Property?          @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   lot          Lot?               @relation(fields: [lotId], references: [id], onDelete: SetNull)
+  development  Development?     @relation(fields: [developmentId], references: [id], onDelete: SetNull)
   user         User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
   client       Client?            @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  marketingCampaign MarketingCampaign? @relation(fields: [marketingCampaignId], references: [id], onDelete: SetNull)
   visits       Visit[]
   interactions LeadInteraction[]
   aiMessageSuggestions AiMessageSuggestion[]
@@ -682,9 +826,12 @@ model Lead {
 
   @@index([propertyId])
   @@index([lotId])
+  @@index([developmentId])
   @@index([userId])
   @@index([status])
   @@index([closingScore])
+  @@index([nextFollowUpAt])
+  @@index([marketingCampaignId])
 }
 
 model LeadPredictionSnapshot {

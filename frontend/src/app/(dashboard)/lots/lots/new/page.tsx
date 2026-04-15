@@ -17,7 +17,9 @@ const schema = z.object({
   number: z.string().min(1),
   area: z.number().optional(),
   price: z.number().optional(),
-  status: z.enum(['DISPONIVEL', 'VENDIDO', 'RESERVADO', 'INDISPONIVEL']).default('DISPONIVEL'),
+  status: z
+    .enum(['DISPONIVEL', 'VENDIDO', 'RESERVADO', 'EM_NEGOCIACAO', 'INDISPONIVEL'])
+    .default('DISPONIVEL'),
 });
 
 export default function NewLotPage() {
@@ -79,6 +81,7 @@ export default function NewLotPage() {
                 <option value="DISPONIVEL">Disponível</option>
                 <option value="VENDIDO">Vendido</option>
                 <option value="RESERVADO">Reservado</option>
+                <option value="EM_NEGOCIACAO">Em negociação</option>
                 <option value="INDISPONIVEL">Indisponível</option>
               </select>
             </div>

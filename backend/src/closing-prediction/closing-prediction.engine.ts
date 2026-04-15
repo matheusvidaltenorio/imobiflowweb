@@ -42,13 +42,17 @@ function scoreFunnel(status: LeadStatus): number {
       return 100;
     case LeadStatus.PERDIDO:
       return 0;
-    case LeadStatus.NEGOCIACAO:
+    case LeadStatus.RESERVADO:
+      return 94;
+    case LeadStatus.PROPOSTA_ENVIADA:
       return 88;
-    case LeadStatus.QUALIFICACAO:
-      return 58;
-    case LeadStatus.PROSPECCAO:
+    case LeadStatus.VISITA_AGENDADA:
+      return 72;
+    case LeadStatus.EM_ATENDIMENTO:
+      return 52;
+    case LeadStatus.NOVO_LEAD:
     default:
-      return 38;
+      return 35;
   }
 }
 
@@ -143,7 +147,9 @@ function buildReasonAndActions(
   const positive: string[] = [];
   const risks: string[] = [];
 
-  if (input.status === LeadStatus.NEGOCIACAO) positive.push('Etapa de negociação no funil');
+  if (input.status === LeadStatus.PROPOSTA_ENVIADA || input.status === LeadStatus.RESERVADO) {
+    positive.push('Pipeline avançado (proposta ou reserva)');
+  }
   if (input.isHot) positive.push('Lead marcado como quente');
   if (input.daysSinceLastInteraction <= 2) positive.push('Resposta ou contato muito recente');
   if (input.visitCompleted) positive.push('Visita ao lote já realizada');
@@ -156,11 +162,15 @@ function buildReasonAndActions(
   if (input.daysSinceLastInteraction >= 10) {
     risks.push(`${input.daysSinceLastInteraction} dias sem nova interação`);
   }
-  if (!input.visitCompleted && !input.visitScheduledFuture && input.status !== LeadStatus.PROSPECCAO) {
+  if (
+    !input.visitCompleted &&
+    !input.visitScheduledFuture &&
+    (input.status === LeadStatus.NOVO_LEAD || input.status === LeadStatus.EM_ATENDIMENTO)
+  ) {
     risks.push('Ainda sem visita agendada ou realizada');
   }
-  if (input.proposalCount === 0 && input.status === LeadStatus.NEGOCIACAO) {
-    risks.push('Em negociação sem proposta formal vinculada ao cliente');
+  if (input.proposalCount === 0 && input.status === LeadStatus.PROPOSTA_ENVIADA) {
+    risks.push('Proposta marcada — formalizar documentação com o cliente');
   }
   if (input.financialFit === 'bad') risks.push('Indicadores de parcela elevada frente à renda');
   if (input.lotTags.includes('NECESITA_ATENCAO_COMERCIAL')) {
@@ -168,7 +178,8 @@ function buildReasonAndActions(
   }
 
   const parts: string[] = [];
-  if (input.status === LeadStatus.NEGOCIACAO) parts.push('em negociação');
+  if (input.status === LeadStatus.PROPOSTA_ENVIADA) parts.push('com proposta enviada');
+  if (input.status === LeadStatus.RESERVADO) parts.push('com reserva');
   if (input.visitCompleted) parts.push('já visitou o lote');
   if (input.daysSinceLastInteraction <= 3) parts.push('respondeu ou interagiu recentemente');
   if (input.proposalCount > 0) parts.push('com proposta em andamento');
@@ -186,14 +197,16 @@ function buildReasonAndActions(
     nextAction = 'Revisar condição comercial e simulação com o cliente';
   } else if (input.daysSinceLastInteraction >= 8) {
     nextAction = 'Retomar contato hoje com mensagem leve';
-  } else if (!input.visitScheduledFuture && !input.visitCompleted && input.status !== LeadStatus.PROSPECCAO) {
+  } else if (!input.visitScheduledFuture && !input.visitCompleted && input.status === LeadStatus.NOVO_LEAD) {
     nextAction = 'Agendar visita ao lote';
-  } else if (input.status === LeadStatus.NEGOCIACAO && input.proposalCount === 0) {
-    nextAction = 'Enviar proposta detalhada hoje';
+  } else if (input.status === LeadStatus.EM_ATENDIMENTO && !input.visitScheduledFuture) {
+    nextAction = 'Agendar visita ao lote';
+  } else if (input.status === LeadStatus.PROPOSTA_ENVIADA && input.proposalCount === 0) {
+    nextAction = 'Formalizar proposta e documentação hoje';
   } else if (finalScore >= 78) {
     nextAction = 'Priorizar este lead hoje — avançar fechamento ou confirmação';
-  } else if (input.visitCompleted && input.status === LeadStatus.QUALIFICACAO) {
-    nextAction = 'Confirmar interesse e conduzir para negociação';
+  } else if (input.visitCompleted && input.status === LeadStatus.VISITA_AGENDADA) {
+    nextAction = 'Confirmar interesse e enviar proposta';
   }
 
   return { reason, nextAction, positive, risks };

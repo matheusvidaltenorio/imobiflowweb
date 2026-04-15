@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
+  Activity,
+  BarChart3,
   Building2,
   CalendarDays,
   ChevronRight,
@@ -24,6 +26,7 @@ import {
   UserCircle,
   Users,
   Wallet,
+  Radio,
   type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
@@ -47,9 +50,11 @@ const brokerGroups: NavGroup[] = [
     title: 'Principal',
     items: [
       { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, exact: true },
+      { href: '/analytics', label: 'Analytics', icon: BarChart3 },
       { href: '/developments', label: 'Loteamentos', icon: MapPinned },
       { href: '/lots', label: 'Quadras e lotes', icon: LayoutGrid },
       { href: '/publication', label: 'Centro de publicação', icon: Megaphone },
+      { href: '/campaigns', label: 'Campanhas', icon: Radio },
       { href: '/integrations', label: 'Integrações', icon: Plug },
       { href: '/melhores-lotes', label: 'Melhores lotes', icon: TrendingUp },
     ],
@@ -57,7 +62,7 @@ const brokerGroups: NavGroup[] = [
   {
     title: 'Relacionamento',
     items: [
-      { href: '/leads', label: 'Leads', icon: Users },
+      { href: '/leads', label: 'CRM / Pipeline', icon: Users },
       { href: '/clients', label: 'Clientes', icon: UserCircle },
     ],
   },
@@ -80,10 +85,13 @@ const adminGroups: NavGroup[] = [
     title: 'Principal',
     items: [
       { href: '/admin', label: 'Dashboard', icon: LayoutDashboard, exact: true },
+      { href: '/analytics', label: 'Analytics', icon: BarChart3 },
       { href: '/admin/users', label: 'Usuários', icon: Users },
       { href: '/admin/developments', label: 'Loteamentos', icon: MapPinned },
       { href: '/admin/properties', label: 'Imóveis', icon: Building2 },
+      { href: '/admin/publication-ops', label: 'Fila de publicações', icon: Activity },
       { href: '/publication', label: 'Centro de publicação', icon: Megaphone },
+      { href: '/campaigns', label: 'Campanhas', icon: Radio },
       { href: '/integrations', label: 'Integrações', icon: Plug },
       { href: '/melhores-lotes', label: 'Melhores lotes', icon: TrendingUp },
     ],

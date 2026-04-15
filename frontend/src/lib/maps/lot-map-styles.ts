@@ -5,6 +5,8 @@ export function lotStatusMapStyle(status: string): { fill: string; stroke: strin
       return { fill: '#22c55e66', stroke: '#15803d', strokeWeight: 2 };
     case 'RESERVADO':
       return { fill: '#eab30855', stroke: '#ca8a04', strokeWeight: 2 };
+    case 'EM_NEGOCIACAO':
+      return { fill: '#3b82f666', stroke: '#1d4ed8', strokeWeight: 2 };
     case 'VENDIDO':
       return { fill: '#ef444466', stroke: '#b91c1c', strokeWeight: 2 };
     default:

@@ -194,6 +194,11 @@ export class LotsService {
     return updated;
   }
 
+  /** Atalhos de status para o fluxo comercial de loteamentos (reutilizam update). */
+  async setStatus(id: string, status: PropertyStatus) {
+    return this.update(id, { status });
+  }
+
   async delete(id: string) {
     const prev = await this.prisma.lot.findUnique({ where: { id }, include: { block: true } });
     if (!prev) throw new NotFoundException('Lote não encontrado');

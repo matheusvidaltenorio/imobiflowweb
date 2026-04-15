@@ -29,6 +29,7 @@ import { MapsModule } from './maps/maps.module';
 import { InstagramAdsModule } from './instagram-ads/instagram-ads.module';
 import { CampaignStudioModule } from './campaign-studio/campaign-studio.module';
 import { SocialModule } from './social/social.module';
+import { AnalyticsModule } from './analytics/analytics.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 
@@ -48,6 +49,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     InstagramAdsModule,
     CampaignStudioModule,
     SocialModule,
+    AnalyticsModule,
     CloudinaryModule,
     AuthModule,
     UsersModule,

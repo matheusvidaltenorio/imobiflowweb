@@ -390,7 +390,16 @@ export async function seedDemoUniverse(prisma: PrismaClient): Promise<void> {
         email: `demo.lead.${i + 1}@example.test`,
         phone: `8897777${6000 + i}`,
         source: DEMO_SOURCE,
-        status: i === 0 ? 'PROSPECCAO' : i === 1 ? 'QUALIFICACAO' : i === 2 ? 'NEGOCIACAO' : i === 3 ? 'VENDIDO' : 'PERDIDO',
+        status:
+          i === 0
+            ? 'NOVO_LEAD'
+            : i === 1
+              ? 'EM_ATENDIMENTO'
+              : i === 2
+                ? 'PROPOSTA_ENVIADA'
+                : i === 3
+                  ? 'VENDIDO'
+                  : 'PERDIDO',
         isHot: i === 2 || i === 3,
         clientId: clientRows[i]!.id,
         lotId: lots[i]?.id,

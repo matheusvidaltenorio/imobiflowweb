@@ -12,7 +12,12 @@ const GRAPH = 'https://graph.facebook.com';
 /** Default aligned with dialog/oauth e Graph — override com META_GRAPH_VERSION */
 const DEFAULT_META_GRAPH_VERSION = 'v18.0';
 
-export type MetaOAuthStatePayload = { uid: string; exp: number };
+/** scopeMode reflete o modo usado em /meta/connect (para gravar grantedScopes no callback). */
+export type MetaOAuthStatePayload = {
+  uid: string;
+  exp: number;
+  scopeMode?: 'minimal' | 'extended' | null;
+};
 
 /** Trim + aspas .env — não altere o path do redirect (deve bater com o app Meta). */
 function trimQuotes(raw: string | undefined): string {
@@ -103,9 +108,12 @@ export class MetaOAuthService {
     return this.config.get<string>('JWT_SECRET') ?? 'dev-insecure';
   }
 
-  createState(userId: string): string {
+  createState(userId: string, requestMode: MetaOAuthScopeMode | null): string {
     const exp = Date.now() + 15 * 60 * 1000;
-    const payload = JSON.stringify({ uid: userId, exp } as MetaOAuthStatePayload);
+    let scopeMode: 'minimal' | 'extended' | null = null;
+    if (requestMode === 'extended') scopeMode = 'extended';
+    else if (requestMode === 'minimal') scopeMode = 'minimal';
+    const payload = JSON.stringify({ uid: userId, exp, scopeMode } satisfies MetaOAuthStatePayload);
     const sig = createHmac('sha256', this.signingSecret()).update(payload).digest('hex');
     return Buffer.from(`${payload}::${sig}`).toString('base64url');
   }

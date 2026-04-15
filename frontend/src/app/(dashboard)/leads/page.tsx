@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   DndContext,
@@ -15,19 +15,36 @@ import {
   type DragStartEvent,
 } from '@dnd-kit/core';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { MessageCircle, Calendar, XCircle, Flame, Sparkles } from 'lucide-react';
+import {
+  Banknote,
+  Calendar,
+  CheckCircle2,
+  Filter,
+  Flame,
+  Home,
+  Loader2,
+  MessageCircle,
+  Sparkles,
+  XCircle,
+} from 'lucide-react';
 import { api } from '@/lib/api';
+import { useAuth } from '@/lib/auth-context';
 import { cn, formatDate, formatPrice } from '@/lib/utils';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/toaster';
 import { ScheduleVisitModal } from '@/components/leads/schedule-visit-modal';
 import { LeadMessageAssistantDialog } from '@/components/commercial-assistant/lead-message-assistant-dialog';
 
+/** Pipeline comercial (alinhado ao LeadStatus do backend). */
 const COLUMNS = [
-  { id: 'PROSPECCAO', label: 'Prospecção', color: 'gray' },
-  { id: 'QUALIFICACAO', label: 'Qualificação', color: 'blue' },
-  { id: 'NEGOCIACAO', label: 'Negociação', color: 'yellow' },
+  { id: 'NOVO_LEAD', label: 'Novo lead', color: 'gray' },
+  { id: 'EM_ATENDIMENTO', label: 'Atendimento', color: 'blue' },
+  { id: 'VISITA_AGENDADA', label: 'Visita', color: 'indigo' },
+  { id: 'PROPOSTA_ENVIADA', label: 'Proposta', color: 'amber' },
+  { id: 'RESERVADO', label: 'Reservado', color: 'orange' },
   { id: 'VENDIDO', label: 'Vendido', color: 'green' },
   { id: 'PERDIDO', label: 'Perdido', color: 'red' },
 ] as const;
@@ -35,34 +52,55 @@ const COLUMNS = [
 type LeadStatus = (typeof COLUMNS)[number]['id'];
 
 const COLUMN_COLORS: Record<LeadStatus, string> = {
-  PROSPECCAO: 'bg-surface border-surface-muted shadow-sm',
-  QUALIFICACAO: 'bg-primary-50/80 border-primary-200/80',
-  NEGOCIACAO: 'bg-accent-50/60 border-accent-200/70',
+  NOVO_LEAD: 'bg-surface border-surface-muted shadow-sm',
+  EM_ATENDIMENTO: 'bg-primary-50/80 border-primary-200/80',
+  VISITA_AGENDADA: 'bg-indigo-50/90 border-indigo-200/80',
+  PROPOSTA_ENVIADA: 'bg-amber-50/90 border-amber-200/80',
+  RESERVADO: 'bg-orange-50/90 border-orange-200/80',
   VENDIDO: 'bg-emerald-50/90 border-success-500/25',
   PERDIDO: 'bg-red-50/90 border-red-200',
 };
 
 const CARD_ACCENT: Record<LeadStatus, string> = {
-  PROSPECCAO: 'border-l-primary-300',
-  QUALIFICACAO: 'border-l-primary-600',
-  NEGOCIACAO: 'border-l-accent-500',
+  NOVO_LEAD: 'border-l-slate-400',
+  EM_ATENDIMENTO: 'border-l-primary-600',
+  VISITA_AGENDADA: 'border-l-indigo-500',
+  PROPOSTA_ENVIADA: 'border-l-amber-500',
+  RESERVADO: 'border-l-orange-500',
   VENDIDO: 'border-l-success-600',
   PERDIDO: 'border-l-red-500',
 };
 
+/** Compatibilidade com dados antigos ou migrações parciais. */
 const LEGACY_STATUS_MAP: Record<string, LeadStatus> = {
-  NOVO: 'PROSPECCAO',
-  EM_CONTATO: 'QUALIFICACAO',
-  VISITA: 'NEGOCIACAO',
+  PROSPECCAO: 'NOVO_LEAD',
+  QUALIFICACAO: 'EM_ATENDIMENTO',
+  NEGOCIACAO: 'PROPOSTA_ENVIADA',
+  NOVO: 'NOVO_LEAD',
+  EM_CONTATO: 'EM_ATENDIMENTO',
+  VISITA: 'VISITA_AGENDADA',
   CONVERTIDO: 'VENDIDO',
   PERDIDO: 'PERDIDO',
 };
 
 function normalizeStatus(s: string): LeadStatus {
-  return (LEGACY_STATUS_MAP[s] || s || 'PROSPECCAO') as LeadStatus;
+  const raw = (LEGACY_STATUS_MAP[s] || s || 'NOVO_LEAD') as string;
+  const col = COLUMNS.find((c) => c.id === raw);
+  return (col?.id ?? 'NOVO_LEAD') as LeadStatus;
 }
 
 type LeadSort = 'default' | 'closing' | 'risk' | 'recent';
+
+const LEAD_SOURCE_FILTER_OPTIONS = [
+  { value: '', label: 'Todas as origens' },
+  { value: 'WHATSAPP', label: 'WhatsApp' },
+  { value: 'INSTAGRAM', label: 'Instagram' },
+  { value: 'FACEBOOK', label: 'Facebook' },
+  { value: 'SITE', label: 'Site' },
+  { value: 'INDICACAO', label: 'Indicação' },
+  { value: 'TRAFICO_PAGO', label: 'Tráfego pago' },
+  { value: 'OUTRO', label: 'Outro' },
+] as const;
 
 type Lead = {
   id: string;
@@ -89,6 +127,10 @@ type Lead = {
     price?: unknown;
     block?: { id: string; name: string; developmentId: string; development?: { id: string; name: string } };
   } | null;
+  development?: { id: string; name: string; city?: string } | null;
+  nextFollowUpAt?: string | null;
+  lostReason?: string | null;
+  closingInterestLevel?: string | null;
   createdAt: string;
 };
 
@@ -135,6 +177,12 @@ function sortLeadsForKanban(leads: Lead[], sort: LeadSort): Lead[] {
   return copy;
 }
 
+function daysSinceLast(iso?: string | null): number | null {
+  if (!iso) return null;
+  const d = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+  return d >= 0 ? d : null;
+}
+
 function buildWhatsAppUrl(lead: Lead): string | null {
   const phone = (lead.phone || '').replace(/\D/g, '');
   if (phone.length < 10) return null;
@@ -143,6 +191,8 @@ function buildWhatsAppUrl(lead: Lead): string | null {
     const dev = lead.lot.block?.development?.name ?? 'loteamento';
     const quadra = lead.lot.block?.name ?? 'quadra';
     msg = `Olá, tenho interesse no lote ${lead.lot.number} da ${quadra} do empreendimento ${dev}.`;
+  } else if (lead.development?.name) {
+    msg = `Olá ${lead.name}, acompanho seu interesse no empreendimento ${lead.development.name}. Posso ajudar?`;
   } else {
     msg = `Olá ${lead.name}, vi que você se interessou pelo imóvel ${lead.property?.title || 'imóvel'}. Vamos conversar?`;
   }
@@ -155,6 +205,8 @@ function LeadCard({
   onScheduleVisit,
   onMarkLost,
   onOpenAssistant,
+  onCommercial,
+  commercialPending,
   isDragging,
 }: {
   lead: Lead;
@@ -162,12 +214,15 @@ function LeadCard({
   onScheduleVisit: () => void;
   onMarkLost: () => void;
   onOpenAssistant?: () => void;
+  onCommercial?: (action: 'WHATSAPP' | 'PROPOSTA' | 'RESERVA' | 'VENDA') => void;
+  commercialPending?: boolean;
   isDragging?: boolean;
 }) {
   const whatsappUrl = buildWhatsAppUrl(lead);
   const price = lead.property?.price != null ? formatPrice(Number(lead.property.price)) : null;
 
   const cs = numScore(lead.closingScore);
+  const stale = daysSinceLast(lead.leadLastInteractionAt);
 
   return (
     <Card
@@ -197,7 +252,19 @@ function LeadCard({
               Quente
             </span>
           ) : null}
+          {lead.closingInterestLevel ? (
+            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-bold uppercase text-slate-700">
+              {lead.closingInterestLevel}
+            </span>
+          ) : null}
         </div>
+        <p className="text-[10px] text-gray-500">
+          {stale === null
+            ? 'Sem interação registrada'
+            : stale === 0
+              ? 'Contato hoje'
+              : `${stale}d sem contato`}
+        </p>
         {lead.closingPrediction ? (
           <p className="text-[11px] font-semibold uppercase tracking-wide text-primary-800">{lead.closingPrediction}</p>
         ) : null}
@@ -212,6 +279,17 @@ function LeadCard({
             {lead.lot.price != null && (
               <span className="ml-1 text-gray-500">• {formatPrice(Number(lead.lot.price))}</span>
             )}
+          </Link>
+        ) : lead.development ? (
+          <Link
+            href={`/developments/edit/${lead.development.id}`}
+            className="block text-sm font-medium text-primary-600 hover:underline"
+          >
+            <span className="inline-flex items-center gap-1">
+              <Home className="h-3.5 w-3.5" />
+              {lead.development.name}
+              {lead.development.city ? ` · ${lead.development.city}` : ''}
+            </span>
           </Link>
         ) : (
           <Link
@@ -243,7 +321,10 @@ function LeadCard({
               href={whatsappUrl}
               target="_blank"
               rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                onCommercial?.('WHATSAPP');
+              }}
               className="inline-flex items-center gap-1 rounded-lg bg-success-600 px-2.5 py-1.5 text-xs font-bold text-white shadow-md shadow-success-600/25 transition hover:bg-success-700"
             >
               <MessageCircle className="h-3.5 w-3.5" />
@@ -261,9 +342,56 @@ function LeadCard({
               }}
             >
               <Calendar className="h-3.5 w-3.5" />
-              Agendar visita
+              Visita
             </Button>
           )}
+          {onCommercial && status !== 'VENDIDO' && status !== 'PERDIDO' ? (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={commercialPending}
+                className="h-8 gap-1 px-2 text-[11px] font-bold"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onCommercial('PROPOSTA');
+                }}
+              >
+                {commercialPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Banknote className="h-3 w-3" />}
+                Proposta
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={commercialPending || !lead.lot}
+                title={!lead.lot ? 'Associe um lote ao lead' : undefined}
+                className="h-8 gap-1 px-2 text-[11px] font-bold"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onCommercial('RESERVA');
+                }}
+              >
+                Reserva
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={commercialPending || !lead.lot}
+                title={!lead.lot ? 'Associe um lote ao lead' : undefined}
+                className="h-8 gap-1 px-2 text-[11px] font-bold text-success-800"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onCommercial('VENDA');
+                }}
+              >
+                <CheckCircle2 className="h-3 w-3" />
+                Venda
+              </Button>
+            </>
+          ) : null}
           {status !== 'PERDIDO' && (
             <Button
               variant="ghost"
@@ -290,12 +418,16 @@ function DraggableLeadCard({
   onScheduleVisit,
   onMarkLost,
   onOpenAssistant,
+  onCommercial,
+  commercialPending,
 }: {
   lead: Lead;
   status: LeadStatus;
   onScheduleVisit: () => void;
   onMarkLost: () => void;
   onOpenAssistant?: () => void;
+  onCommercial?: (action: 'WHATSAPP' | 'PROPOSTA' | 'RESERVA' | 'VENDA') => void;
+  commercialPending?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: lead.id,
@@ -310,6 +442,8 @@ function DraggableLeadCard({
         onScheduleVisit={onScheduleVisit}
         onMarkLost={onMarkLost}
         onOpenAssistant={onOpenAssistant}
+        onCommercial={onCommercial}
+        commercialPending={commercialPending}
         isDragging={isDragging}
       />
     </div>
@@ -322,12 +456,16 @@ function KanbanColumn({
   onScheduleVisit,
   onMarkLost,
   onOpenAssistant,
+  onCommercial,
+  commercialPendingId,
 }: {
   column: (typeof COLUMNS)[number];
   leads: Lead[];
   onScheduleVisit: (lead: Lead) => void;
   onMarkLost: (lead: Lead) => void;
   onOpenAssistant: (lead: Lead) => void;
+  onCommercial: (lead: Lead, action: 'WHATSAPP' | 'PROPOSTA' | 'RESERVA' | 'VENDA') => void;
+  commercialPendingId: string | null;
 }) {
   const status = column.id;
   const { setNodeRef, isOver } = useDroppable({ id: status });
@@ -356,6 +494,8 @@ function KanbanColumn({
             onScheduleVisit={() => onScheduleVisit(lead)}
             onMarkLost={() => onMarkLost(lead)}
             onOpenAssistant={() => onOpenAssistant(lead)}
+            onCommercial={(a) => onCommercial(lead, a)}
+            commercialPending={commercialPendingId === lead.id}
           />
         ))}
       </div>
@@ -366,20 +506,71 @@ function KanbanColumn({
 export default function LeadsPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { user } = useAuth();
   const [scheduleLead, setScheduleLead] = useState<Lead | null>(null);
   const [assistantLead, setAssistantLead] = useState<Lead | null>(null);
   const [activeLead, setActiveLead] = useState<Lead | null>(null);
   const [activeStatus, setActiveStatus] = useState<LeadStatus | null>(null);
   const [sortMode, setSortMode] = useState<LeadSort>('default');
+  const [filterDevelopmentId, setFilterDevelopmentId] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [filterLeadSource, setFilterLeadSource] = useState('');
+  const [filterFrom, setFilterFrom] = useState('');
+  const [filterTo, setFilterTo] = useState('');
+  const [filterPriority, setFilterPriority] = useState<'hot' | 'stale' | ''>('');
+  const [filterAssignedUserId, setFilterAssignedUserId] = useState('');
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
+  const leadsQuery = useMemo(() => {
+    const p = new URLSearchParams();
+    if (sortMode !== 'default') {
+      p.set(
+        'sort',
+        sortMode === 'closing' ? 'closing' : sortMode === 'risk' ? 'risk' : 'recent'
+      );
+    }
+    if (filterDevelopmentId) p.set('developmentId', filterDevelopmentId);
+    if (filterStatus) p.set('status', filterStatus);
+    if (filterLeadSource) p.set('leadSource', filterLeadSource);
+    if (filterFrom) p.set('from', filterFrom);
+    if (filterTo) p.set('to', filterTo);
+    if (filterPriority) p.set('priority', filterPriority);
+    if (user?.role === 'ADMIN' && filterAssignedUserId) p.set('assignedUserId', filterAssignedUserId);
+    const s = p.toString();
+    return s ? `?${s}` : '';
+  }, [
+    sortMode,
+    filterDevelopmentId,
+    filterStatus,
+    filterLeadSource,
+    filterFrom,
+    filterTo,
+    filterPriority,
+    filterAssignedUserId,
+    user?.role,
+  ]);
 
   const { data: leads = [], isLoading } = useQuery({
-    queryKey: ['leads', sortMode],
+    queryKey: ['leads', leadsQuery],
     queryFn: async () => {
-      const q =
-        sortMode === 'default'
-          ? ''
-          : `?sort=${sortMode === 'closing' ? 'closing' : sortMode === 'risk' ? 'risk' : 'recent'}`;
-      const { data } = await api.get(`/leads${q}`);
+      const { data } = await api.get(`/leads${leadsQuery}`);
+      return data;
+    },
+  });
+
+  const { data: developments = [] } = useQuery({
+    queryKey: ['developments'],
+    queryFn: async () => {
+      const { data } = await api.get<Array<{ id: string; name: string }>>('/developments');
+      return data;
+    },
+  });
+
+  const { data: brokerUsers = [] } = useQuery({
+    queryKey: ['users', 'CORRETOR'],
+    enabled: user?.role === 'ADMIN',
+    queryFn: async () => {
+      const { data } = await api.get<Array<{ id: string; name: string }>>('/users?role=CORRETOR');
       return data;
     },
   });
@@ -393,6 +584,46 @@ export default function LeadsPage() {
     },
     onError: () => toast({ title: 'Erro ao atualizar', type: 'error' }),
   });
+
+  const commercialMutation = useMutation({
+    mutationFn: async (vars: {
+      id: string;
+      action: 'WHATSAPP' | 'PROPOSTA' | 'RESERVA' | 'VENDA' | 'PERDA';
+      lostReason?: string;
+    }) => {
+      await api.post(`/leads/${vars.id}/commercial-action`, {
+        action: vars.action,
+        lostReason: vars.lostReason,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      toast({ title: 'Ação registrada', type: 'success' });
+    },
+    onError: (err: unknown) => {
+      const res = (err as { response?: { data?: { message?: string | string[] } } })?.response?.data;
+      const msg = res?.message;
+      const text = Array.isArray(msg) ? msg.join(', ') : typeof msg === 'string' ? msg : 'Erro ao executar ação';
+      toast({ title: text, type: 'error' });
+    },
+  });
+
+  const commercialPendingId =
+    commercialMutation.isPending && commercialMutation.variables ? commercialMutation.variables.id : null;
+
+  function handleCommercial(lead: Lead, action: 'WHATSAPP' | 'PROPOSTA' | 'RESERVA' | 'VENDA') {
+    commercialMutation.mutate({ id: lead.id, action });
+  }
+
+  function handleMarkLost(lead: Lead) {
+    const reason = window.prompt('Motivo da perda (opcional):');
+    if (reason === null) return;
+    commercialMutation.mutate({
+      id: lead.id,
+      action: 'PERDA',
+      lostReason: reason.trim() || undefined,
+    });
+  }
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -426,7 +657,7 @@ export default function LeadsPage() {
     const activeData = active.data.current;
     if (!activeData?.lead) return;
 
-    const sourceStatus = (activeData.status as LeadStatus) || 'PROSPECCAO';
+    const sourceStatus = (activeData.status as LeadStatus) || 'NOVO_LEAD';
     const isOverColumn = COLUMNS.some((c) => c.id === overId);
     let targetStatus: LeadStatus | undefined = isOverColumn ? (overId as LeadStatus) : undefined;
     if (!targetStatus) {
@@ -440,9 +671,9 @@ export default function LeadsPage() {
 
   return (
     <main className="overflow-hidden bg-surface p-6 md:p-10">
-        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-primary-950">Funil de leads</h1>
+            <h1 className="text-3xl font-bold tracking-tight text-primary-950">CRM — Pipeline comercial</h1>
             <p className="mt-2 max-w-2xl text-gray-600">
               Arraste os cards entre etapas, responda rápido no WhatsApp e agende visitas — cada movimento aproxima a
               venda. O número no card é a chance de fechamento (0–100), com anel verde, âmbar ou vermelho.
@@ -466,9 +697,164 @@ export default function LeadsPage() {
           </div>
         </div>
 
+        <div className="mb-6 flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="gap-2 font-bold"
+            onClick={() => setFiltersOpen((o) => !o)}
+          >
+            <Filter className="h-4 w-4" />
+            Filtros
+          </Button>
+          {(filterDevelopmentId ||
+            filterStatus ||
+            filterLeadSource ||
+            filterFrom ||
+            filterTo ||
+            filterPriority ||
+            filterAssignedUserId) && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="text-gray-600"
+              onClick={() => {
+                setFilterDevelopmentId('');
+                setFilterStatus('');
+                setFilterLeadSource('');
+                setFilterFrom('');
+                setFilterTo('');
+                setFilterPriority('');
+                setFilterAssignedUserId('');
+              }}
+            >
+              Limpar filtros
+            </Button>
+          )}
+        </div>
+
+        {filtersOpen ? (
+          <div className="mb-8 grid gap-4 rounded-xl border border-surface-muted bg-white px-4 py-4 shadow-sm sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="flt-dev" className="text-xs font-bold uppercase tracking-wide text-gray-500">
+                Loteamento
+              </Label>
+              <select
+                id="flt-dev"
+                value={filterDevelopmentId}
+                onChange={(e) => setFilterDevelopmentId(e.target.value)}
+                className="h-10 rounded-lg border border-surface-muted bg-white px-3 text-sm font-medium text-primary-950"
+              >
+                <option value="">Todos</option>
+                {developments.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="flt-st" className="text-xs font-bold uppercase tracking-wide text-gray-500">
+                Estágio
+              </Label>
+              <select
+                id="flt-st"
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="h-10 rounded-lg border border-surface-muted bg-white px-3 text-sm font-medium text-primary-950"
+              >
+                <option value="">Todos</option>
+                {COLUMNS.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="flt-src" className="text-xs font-bold uppercase tracking-wide text-gray-500">
+                Origem
+              </Label>
+              <select
+                id="flt-src"
+                value={filterLeadSource}
+                onChange={(e) => setFilterLeadSource(e.target.value)}
+                className="h-10 rounded-lg border border-surface-muted bg-white px-3 text-sm font-medium text-primary-950"
+              >
+                {LEAD_SOURCE_FILTER_OPTIONS.map((o) => (
+                  <option key={o.value || 'all'} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="flt-pri" className="text-xs font-bold uppercase tracking-wide text-gray-500">
+                Prioridade
+              </Label>
+              <select
+                id="flt-pri"
+                value={filterPriority}
+                onChange={(e) => setFilterPriority((e.target.value as 'hot' | 'stale' | '') || '')}
+                className="h-10 rounded-lg border border-surface-muted bg-white px-3 text-sm font-medium text-primary-950"
+              >
+                <option value="">Todas</option>
+                <option value="hot">Quente (hot)</option>
+                <option value="stale">Sem contato (stale)</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="flt-from" className="text-xs font-bold uppercase tracking-wide text-gray-500">
+                De (data)
+              </Label>
+              <Input
+                id="flt-from"
+                type="date"
+                value={filterFrom}
+                onChange={(e) => setFilterFrom(e.target.value)}
+                className="h-10"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="flt-to" className="text-xs font-bold uppercase tracking-wide text-gray-500">
+                Até (data)
+              </Label>
+              <Input
+                id="flt-to"
+                type="date"
+                value={filterTo}
+                onChange={(e) => setFilterTo(e.target.value)}
+                className="h-10"
+              />
+            </div>
+            {user?.role === 'ADMIN' ? (
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="flt-broker" className="text-xs font-bold uppercase tracking-wide text-gray-500">
+                  Corretor
+                </Label>
+                <select
+                  id="flt-broker"
+                  value={filterAssignedUserId}
+                  onChange={(e) => setFilterAssignedUserId(e.target.value)}
+                  className="h-10 rounded-lg border border-surface-muted bg-white px-3 text-sm font-medium text-primary-950"
+                >
+                  <option value="">Todos</option>
+                  {brokerUsers.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
         {isLoading ? (
           <div className="flex gap-4 overflow-x-auto pb-4">
-            {[1, 2, 3, 4, 5].map((i) => (
+            {[1, 2, 3, 4, 5, 6, 7].map((i) => (
               <div key={i} className="h-80 min-w-[280px] animate-pulse rounded-2xl bg-surface-muted/80" />
             ))}
           </div>
@@ -491,8 +877,10 @@ export default function LeadsPage() {
                     column={col}
                     leads={leadsByStatus[col.id] || []}
                     onScheduleVisit={setScheduleLead}
-                    onMarkLost={(lead) => updateStatus.mutate({ id: lead.id, status: 'PERDIDO' })}
+                    onMarkLost={handleMarkLost}
                     onOpenAssistant={setAssistantLead}
+                    onCommercial={handleCommercial}
+                    commercialPendingId={commercialPendingId}
                   />
                 </div>
               ))}

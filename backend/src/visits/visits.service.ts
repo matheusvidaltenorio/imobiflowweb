@@ -77,6 +77,12 @@ export class VisitsService {
         });
         if (p) ok = true;
       }
+      if (!ok && lead.developmentId) {
+        const p = await this.prisma.property.findFirst({
+          where: { userId, developmentId: lead.developmentId },
+        });
+        if (p) ok = true;
+      }
       if (!ok) throw new ForbiddenException('Lead inválido');
     }
 
@@ -113,17 +119,20 @@ export class VisitsService {
 
     if (data.leadId) {
       const prevLead = await this.prisma.lead.findUnique({ where: { id: data.leadId } });
-      const wasNegotiation =
-        prevLead?.status === LeadStatus.NEGOCIACAO || prevLead?.status === LeadStatus.VENDIDO;
-      await this.prisma.lead.update({
-        where: { id: data.leadId },
-        data: { status: 'NEGOCIACAO' },
-      });
-      const lotForProposal = prevLead?.lotId ?? data.lotId;
-      if (lotForProposal && !wasNegotiation) {
-        await this.prisma.lot.update({
-          where: { id: lotForProposal },
-          data: { proposalsCount: { increment: 1 } },
+      if (prevLead) {
+        const terminal = prevLead.status === LeadStatus.VENDIDO || prevLead.status === LeadStatus.PERDIDO;
+        const keepStage =
+          prevLead.status === LeadStatus.RESERVADO ||
+          prevLead.status === LeadStatus.PROPOSTA_ENVIADA ||
+          prevLead.status === LeadStatus.VENDIDO;
+        const nextStatus = terminal || keepStage ? prevLead.status : LeadStatus.VISITA_AGENDADA;
+        await this.prisma.lead.update({
+          where: { id: data.leadId },
+          data: {
+            status: nextStatus,
+            leadLastInteractionAt: new Date(),
+            interactionCount: { increment: 1 },
+          },
         });
       }
       await this.prisma.leadInteraction.create({

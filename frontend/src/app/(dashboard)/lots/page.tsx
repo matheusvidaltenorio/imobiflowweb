@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
@@ -10,9 +10,12 @@ import {
   Layers,
   LayoutGrid,
   List,
+  Calendar,
+  HeartHandshake,
   Loader2,
   Map as MapIcon,
   MapPinned,
+  MessageCircle,
   Pencil,
   Plus,
   Sparkles,
@@ -22,6 +25,7 @@ import { api } from '@/lib/api';
 import { formatPrice, cn } from '@/lib/utils';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/components/ui/toaster';
 import { PageHeader } from '@/components/dashboard/page-header';
@@ -31,6 +35,7 @@ import { LotPaymentSimulator } from '@/components/lotes/lot-payment-simulator';
 import { DevelopmentLotsMap } from '@/components/maps/development-lots-map';
 import { LotMapDialog } from '@/components/maps/lot-map-dialog';
 import type { GeoMapDevelopment, GeoMapLot, GeoMapNearbyPlace } from '@/components/maps/development-lots-map';
+import { LotInterestModal } from '@/components/lotes/lot-interest-modal';
 
 type MapLotRow = GeoMapLot & {
   isOpportunity: boolean;
@@ -56,6 +61,8 @@ function mapCellClass(status: string) {
       return 'border-success-500/80 bg-success-50/90 text-success-950';
     case 'RESERVADO':
       return 'border-warning-500/80 bg-warning-50/90 text-warning-950';
+    case 'EM_NEGOCIACAO':
+      return 'border-sky-500/80 bg-sky-50/90 text-sky-950';
     case 'VENDIDO':
       return 'border-danger-500/80 bg-danger-50/90 text-danger-950';
     default:
@@ -69,6 +76,8 @@ function lotCardBorder(status: string) {
       return 'border-l-success-500';
     case 'RESERVADO':
       return 'border-l-warning-500';
+    case 'EM_NEGOCIACAO':
+      return 'border-l-sky-500';
     case 'VENDIDO':
       return 'border-l-danger-500';
     default:
@@ -76,7 +85,16 @@ function lotCardBorder(status: string) {
   }
 }
 
+const DEFAULT_STATUS_FILTERS = [
+  'DISPONIVEL',
+  'RESERVADO',
+  'EM_NEGOCIACAO',
+  'VENDIDO',
+  'INDISPONIVEL',
+] as const;
+
 export default function LotsPage() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const developmentId = searchParams.get('development');
   const blockId = searchParams.get('block');
@@ -87,6 +105,10 @@ export default function LotsPage() {
   const [viewMode, setViewMode] = useState<'list' | 'grid' | 'map'>('list');
   const [mapDialogLotId, setMapDialogLotId] = useState<string | null>(null);
   const [nearbyTravelMode, setNearbyTravelMode] = useState<'driving' | 'walking'>('driving');
+  const [filterStatus, setFilterStatus] = useState<string[]>([...DEFAULT_STATUS_FILTERS]);
+  const [priceMin, setPriceMin] = useState('');
+  const [priceMax, setPriceMax] = useState('');
+  const [interestLot, setInterestLot] = useState<{ id: string; label: string } | null>(null);
 
   const { data: development } = useQuery({
     queryKey: ['development', developmentId],
@@ -161,15 +183,46 @@ export default function LotsPage() {
   const mapLotsForBlock = (mapData?.lots ?? []).filter((l) => l.blockId === blockId);
   const mapLotsForView = blockId ? mapLotsForBlock : mapData?.lots ?? [];
 
+  const filteredLots = useMemo(() => {
+    return (lots ?? []).filter((l) => {
+      if (!filterStatus.includes(l.status)) return false;
+      const p = Number(l.price ?? 0);
+      const min = priceMin.trim() !== '' ? Number(priceMin) : NaN;
+      const max = priceMax.trim() !== '' ? Number(priceMax) : NaN;
+      if (Number.isFinite(min) && p < min) return false;
+      if (Number.isFinite(max) && p > max) return false;
+      return true;
+    });
+  }, [lots, filterStatus, priceMin, priceMax]);
+
+  const filteredMapLotsForBlock = useMemo(() => {
+    return mapLotsForBlock.filter((l) => {
+      if (!filterStatus.includes(l.status)) return false;
+      const p = Number(l.price ?? 0);
+      const min = priceMin.trim() !== '' ? Number(priceMin) : NaN;
+      const max = priceMax.trim() !== '' ? Number(priceMax) : NaN;
+      if (Number.isFinite(min) && p < min) return false;
+      if (Number.isFinite(max) && p > max) return false;
+      return true;
+    });
+  }, [mapLotsForBlock, filterStatus, priceMin, priceMax]);
+
   const lotStats = useMemo(() => {
     const list = lots ?? [];
     return {
       total: list.length,
       disponivel: list.filter((x) => x.status === 'DISPONIVEL').length,
       reservado: list.filter((x) => x.status === 'RESERVADO').length,
+      negociacao: list.filter((x) => x.status === 'EM_NEGOCIACAO').length,
       vendido: list.filter((x) => x.status === 'VENDIDO').length,
     };
   }, [lots]);
+
+  const toggleStatusFilter = (st: string) => {
+    setFilterStatus((prev) =>
+      prev.includes(st) ? prev.filter((x) => x !== st) : [...prev, st],
+    );
+  };
 
   const deleteBlock = useMutation({
     mutationFn: (id: string) => api.delete(`/blocks/${id}`),
@@ -387,6 +440,9 @@ export default function LotsPage() {
                     <span className="rounded-full border border-warning-200/80 bg-warning-50/90 px-2.5 py-0.5 text-xs font-semibold text-warning-950">
                       {lotStats.reservado} reserv.
                     </span>
+                    <span className="rounded-full border border-sky-200/80 bg-sky-50/90 px-2.5 py-0.5 text-xs font-semibold text-sky-950">
+                      {lotStats.negociacao} neg.
+                    </span>
                     <span className="rounded-full border border-danger-200/70 bg-danger-50/90 px-2.5 py-0.5 text-xs font-semibold text-danger-950">
                       {lotStats.vendido} vend.
                     </span>
@@ -399,6 +455,87 @@ export default function LotsPage() {
                   </div>
                 ) : null}
               </nav>
+            ) : null}
+
+            {blockId && developmentId && blocks && blocks.length > 1 ? (
+              <div className="mb-4">
+                <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                  Quadra
+                </label>
+                <select
+                  value={blockId}
+                  onChange={(e) =>
+                    router.push(`/lots?development=${developmentId}&block=${e.target.value}`)
+                  }
+                  className="h-10 max-w-md rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-primary-950 shadow-sm"
+                >
+                  {blocks.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
+
+            {block && development ? (
+              <div className="mb-6 rounded-2xl border border-slate-200/70 bg-white p-4 shadow-sm">
+                <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Filtros</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {DEFAULT_STATUS_FILTERS.map((st) => {
+                    const labels: Record<string, string> = {
+                      DISPONIVEL: 'Disponível',
+                      RESERVADO: 'Reservado',
+                      EM_NEGOCIACAO: 'Em negociação',
+                      VENDIDO: 'Vendido',
+                      INDISPONIVEL: 'Indisponível',
+                    };
+                    const on = filterStatus.includes(st);
+                    return (
+                      <Button
+                        key={st}
+                        type="button"
+                        size="sm"
+                        variant={on ? 'brand' : 'outline'}
+                        className="h-8 text-[11px]"
+                        onClick={() => toggleStatusFilter(st)}
+                      >
+                        {labels[st] ?? st}
+                      </Button>
+                    );
+                  })}
+                </div>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600">Preço mín. (R$)</label>
+                    <Input
+                      type="number"
+                      min={0}
+                      step={1}
+                      placeholder="Ex.: 50000"
+                      value={priceMin}
+                      onChange={(e) => setPriceMin(e.target.value)}
+                      className="h-10"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600">Preço máx. (R$)</label>
+                    <Input
+                      type="number"
+                      min={0}
+                      step={1}
+                      placeholder="Ex.: 250000"
+                      value={priceMax}
+                      onChange={(e) => setPriceMax(e.target.value)}
+                      className="h-10"
+                    />
+                  </div>
+                </div>
+                <p className="mt-3 text-xs text-slate-600">
+                  Exibindo <strong>{filteredLots.length}</strong> de <strong>{lots?.length ?? 0}</strong> lotes
+                  nesta quadra.
+                </p>
+              </div>
             ) : null}
 
             {lots?.length ? (
@@ -427,7 +564,13 @@ export default function LotsPage() {
                   >
                     <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-500">Simulação</p>
                     <LotPaymentSimulator
-                      defaultLotValue={Number(lots.find((x) => x.price != null)?.price ?? 0) || undefined}
+                      defaultLotValue={
+                        Number(
+                          filteredLots.find((x) => x.price != null)?.price ??
+                            lots?.find((x) => x.price != null)?.price ??
+                            0,
+                        ) || undefined
+                      }
                     />
                   </aside>
 
@@ -480,7 +623,12 @@ export default function LotsPage() {
 
                     {viewMode === 'list' ? (
                       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                        {lots.map((l) => {
+                        {filteredLots.length === 0 ? (
+                          <p className="col-span-full rounded-xl border border-amber-200 bg-amber-50/90 px-4 py-3 text-sm text-amber-950">
+                            Nenhum lote corresponde aos filtros. Ajuste status ou faixa de preço.
+                          </p>
+                        ) : null}
+                        {filteredLots.map((l) => {
                           const busy =
                             updateLotStatus.isPending && updateLotStatus.variables?.id === l.id;
                           return (
@@ -545,10 +693,10 @@ export default function LotsPage() {
 
                               <div className="mt-4 border-t border-surface-muted pt-4">
                                 <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-gray-500">
-                                  Ação rápida
+                                  Ação rápida (status)
                                 </p>
                                 <div className="flex flex-wrap gap-1.5">
-                                  {(['DISPONIVEL', 'RESERVADO', 'VENDIDO'] as const).map((st) => (
+                                  {(['DISPONIVEL', 'RESERVADO', 'EM_NEGOCIACAO', 'VENDIDO'] as const).map((st) => (
                                     <Button
                                       key={st}
                                       type="button"
@@ -564,11 +712,52 @@ export default function LotsPage() {
                                         'Disponível'
                                       ) : st === 'RESERVADO' ? (
                                         'Reservar'
+                                      ) : st === 'EM_NEGOCIACAO' ? (
+                                        'Negociação'
                                       ) : (
                                         'Vendido'
                                       )}
                                     </Button>
                                   ))}
+                                </div>
+                                <p className="mb-2 mt-4 text-[10px] font-bold uppercase tracking-wider text-gray-500">
+                                  Vendas & leads
+                                </p>
+                                <div className="flex flex-wrap gap-1.5">
+                                  <Link href={`/visits/new?lotId=${l.id}`}>
+                                    <Button type="button" size="sm" variant="outline" className="h-8 gap-1 text-[11px]">
+                                      <Calendar className="h-3.5 w-3.5" />
+                                      Agendar visita
+                                    </Button>
+                                  </Link>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-8 gap-1 text-[11px]"
+                                    onClick={() =>
+                                      setInterestLot({
+                                        id: l.id,
+                                        label: `Lote ${l.number} — ${block?.name ?? 'Quadra'} (${development?.name ?? 'Loteamento'})`,
+                                      })
+                                    }
+                                  >
+                                    <HeartHandshake className="h-3.5 w-3.5" />
+                                    Tenho interesse
+                                  </Button>
+                                  <a
+                                    href={`https://wa.me/?text=${encodeURIComponent(
+                                      `Olá! Tenho interesse no lote ${l.number} (${block?.name ?? 'Quadra'}) no empreendimento ${development?.name ?? ''}.`,
+                                    )}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className={cn(
+                                      'inline-flex h-8 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 text-[11px] font-semibold text-success-800 shadow-sm transition hover:bg-success-50',
+                                    )}
+                                  >
+                                    <MessageCircle className="h-3.5 w-3.5" />
+                                    WhatsApp
+                                  </a>
                                 </div>
                               </div>
 
@@ -601,7 +790,7 @@ export default function LotsPage() {
                         <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-3 sm:p-4">
                           <p className="mb-3 text-sm leading-relaxed text-slate-600">
                             Cada bloco é um lote da quadra <strong className="text-slate-800">{block?.name}</strong>.
-                            Verde = disponível, âmbar = reservado, vermelho = vendido.
+                            Verde = disponível, âmbar = reservado, azul = negociação, vermelho = vendido.
                             {mapData?.medianPrice != null && (
                               <span className="ml-1">
                                 Mediana no empreendimento:{' '}
@@ -610,7 +799,12 @@ export default function LotsPage() {
                             )}
                           </p>
                           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-                            {mapLotsForBlock.map((l) => (
+                            {filteredMapLotsForBlock.length === 0 ? (
+                              <p className="col-span-full rounded-lg border border-amber-200 bg-amber-50/90 px-3 py-2 text-sm text-amber-950">
+                                Nenhum lote corresponde aos filtros.
+                              </p>
+                            ) : null}
+                            {filteredMapLotsForBlock.map((l) => (
                               <Link
                                 key={l.id}
                                 href={`/lots/lots/edit/${l.id}?development=${developmentId}&block=${blockId}`}
@@ -698,6 +892,15 @@ export default function LotsPage() {
           highlightLotId={mapDialogLotId}
           loading={mapLoading && !!mapDialogLotId}
         />
+
+        {interestLot ? (
+          <LotInterestModal
+            open={!!interestLot}
+            onOpenChange={(o) => !o && setInterestLot(null)}
+            lotId={interestLot.id}
+            lotLabel={interestLot.label}
+          />
+        ) : null}
       </div>
     </main>
   );

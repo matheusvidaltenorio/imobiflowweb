@@ -1,8 +1,15 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
-import { Prisma, PublicationPlatform, PublicationTargetStatus, UserRole } from '@prisma/client';
+import {
+  MarketingCampaignStatus,
+  Prisma,
+  PublicationPlatform,
+  PublicationTargetStatus,
+  UserRole,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { MetaGraphService } from '../social/meta-graph.service';
 import { SocialConnectionService } from '../social/social-connection.service';
+import { SocialIntegrationLogService } from '../social/social-integration-log.service';
 
 function buildInstagramCaption(parts: Array<string | null | undefined>): string {
   return parts
@@ -20,22 +27,27 @@ export class InstagramPublisherService {
     private readonly graph: MetaGraphService,
     private readonly connections: SocialConnectionService,
     private readonly prisma: PrismaService,
+    private readonly integrationLog: SocialIntegrationLogService,
   ) {}
 
   /**
    * Publica um post de feed (imagem + legenda) via Instagram Graph API.
    * Story/Reel não usam este fluxo (mídia em vídeo / requisitos diferentes).
+   * @param updateCampaignStatus default true — em publicação agendada (multi-canal), use false e o orquestrador define o status final.
    */
   async publishFeed(opts: {
     userId: string;
     role: UserRole;
     campaignId: string;
     socialConnectionId: string;
+    updateCampaignStatus?: boolean;
   }): Promise<{
     externalPostId: string;
     externalContainerId: string;
     raw: Record<string, unknown>;
   }> {
+    const updateCampaignStatus = opts.updateCampaignStatus !== false;
+
     const { pageAccessToken, instagramUserId } = await this.connections.getDecryptedPageToken(
       opts.userId,
       opts.role,
@@ -64,6 +76,14 @@ export class InstagramPublisherService {
       throw new BadRequestException(
         'A campanha não inclui o alvo “Instagram — feed”. Edite a campanha e marque essa plataforma.',
       );
+    }
+
+    if (target.status === PublicationTargetStatus.PUBLISHED && target.externalPostId) {
+      return {
+        externalPostId: target.externalPostId,
+        externalContainerId: target.externalContainerId ?? '',
+        raw: { skipped: true, reason: 'already_published' },
+      };
     }
 
     const primary = campaign.assets.find((a) => a.isPrimary) ?? campaign.assets[0];
@@ -123,6 +143,24 @@ export class InstagramPublisherService {
         },
       });
 
+      if (updateCampaignStatus) {
+        await this.prisma.marketingCampaign.update({
+          where: { id: opts.campaignId },
+          data: { status: MarketingCampaignStatus.PUBLISHED },
+        });
+      }
+
+      await this.integrationLog.log({
+        userId: opts.userId,
+        action: 'CAMPAIGN_PUBLISHED',
+        channel: 'INSTAGRAM_FEED',
+        campaignId: opts.campaignId,
+        socialConnectionId: opts.socialConnectionId,
+        status: 'SUCCESS',
+        externalId: published.id,
+        metadataJson: { instagramUserId },
+      });
+
       return {
         externalPostId: published.id,
         externalContainerId: created.id,
@@ -143,6 +181,21 @@ export class InstagramPublisherService {
           publishError: msg,
           rawResponseJson: { error: msg } as Prisma.InputJsonValue,
         },
+      });
+      if (updateCampaignStatus) {
+        await this.prisma.marketingCampaign.update({
+          where: { id: opts.campaignId },
+          data: { status: MarketingCampaignStatus.FAILED },
+        });
+      }
+      await this.integrationLog.log({
+        userId: opts.userId,
+        action: 'CAMPAIGN_PUBLISH_FAILED',
+        channel: 'INSTAGRAM_FEED',
+        campaignId: opts.campaignId,
+        socialConnectionId: opts.socialConnectionId,
+        status: 'FAILED',
+        message: msg.slice(0, 2000),
       });
       throw new BadRequestException(
         `Não foi possível publicar no Instagram. ${msg} — Verifique permissões, token e se a imagem é acessível publicamente.`,

@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Copy, Loader2, MessageCircle, Navigation, RefreshCw, Sparkles } from 'lucide-react';
+import { Calendar, Copy, HeartHandshake, Loader2, MessageCircle, Navigation, RefreshCw, Sparkles } from 'lucide-react';
 import { api } from '@/lib/api';
 import { cn, formatPrice } from '@/lib/utils';
 import { Card } from '@/components/ui/card';
@@ -23,13 +23,15 @@ import {
 } from '@/components/maps/development-lots-map';
 import type { DevelopmentLocationPrecision } from '@/components/developments/location-precision-badge';
 import { CampaignStudioWizard } from '@/components/marketing/campaign-studio-wizard';
+import { LotInterestModal } from '@/components/lotes/lot-interest-modal';
+import { LotStatusBadge } from '@/components/dashboard/lot-status-badge';
 import { googleDirectionsUrl } from '@/lib/maps/lot-map-styles';
 
 const schema = z.object({
   number: z.string().min(1),
   area: z.number().optional(),
   price: z.number().optional(),
-  status: z.enum(['DISPONIVEL', 'VENDIDO', 'RESERVADO', 'INDISPONIVEL']),
+  status: z.enum(['DISPONIVEL', 'VENDIDO', 'RESERVADO', 'EM_NEGOCIACAO', 'INDISPONIVEL']),
   latStr: z.string().optional(),
   lngStr: z.string().optional(),
   polygonJson: z.string().optional(),
@@ -57,6 +59,7 @@ export default function EditLotPage() {
   const { toast } = useToast();
   const [pitch, setPitch] = useState<LotPitchBundle | null>(null);
   const [nearbyTravelMode, setNearbyTravelMode] = useState<'driving' | 'walking'>('driving');
+  const [interestOpen, setInterestOpen] = useState(false);
 
   const { data: lot, isLoading } = useQuery({
     queryKey: ['lot', id],
@@ -273,14 +276,72 @@ export default function EditLotPage() {
     });
   }
 
+  const lotCommercialLabel = `Lote ${lot.number} — ${lot.block?.name ?? 'Quadra'} (${lot.block?.development?.name ?? 'Loteamento'})`;
+
   return (
     <main className="p-8">
-        <div className="mb-8 flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Editar Lote</h1>
+        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wide text-primary-700">Loteamento</p>
+            <h1 className="text-2xl font-bold text-primary-950">
+              {lot.block?.development?.name ?? 'Loteamento'} · Quadra {lot.block?.name ?? '—'}
+            </h1>
+            <p className="mt-1 text-sm text-gray-600">
+              Lote <strong>#{lot.number}</strong>
+              {lot.block?.development?.city ? ` · ${lot.block.development.city}` : null}
+            </p>
+          </div>
           <Link href={`/lots?development=${developmentId}&block=${blockId}`}>
-            <Button variant="outline">Voltar</Button>
+            <Button variant="outline">Voltar à lista</Button>
           </Link>
         </div>
+
+        <Card className="mb-8 flex flex-col gap-4 border-primary-200/80 bg-gradient-to-br from-white to-primary-50/40 p-6 shadow-card">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wide text-gray-500">Valor</p>
+              <p className="text-3xl font-bold tabular-nums text-primary-900">{formatPrice(Number(lot.price ?? 0))}</p>
+              {lot.area != null ? (
+                <p className="mt-1 text-sm text-gray-600">{lot.area} m²</p>
+              ) : null}
+            </div>
+            <div className="flex flex-col items-start gap-2 sm:items-end">
+              <p className="text-xs font-bold uppercase tracking-wide text-gray-500">Status</p>
+              <LotStatusBadge status={lot.status} className="text-sm px-3 py-1" />
+            </div>
+          </div>
+          {dev ? (
+            <p className="text-sm text-gray-700">
+              <span className="font-semibold text-primary-900">Localização:</span>{' '}
+              {dev.referenceAddress || dev.address || dev.neighborhood || dev.city
+                ? [dev.referenceAddress, dev.address, dev.neighborhood, dev.city].filter(Boolean).join(' · ')
+                : 'Complete o endereço no cadastro do loteamento.'}
+            </p>
+          ) : null}
+          <div className="flex flex-wrap gap-2">
+            <Link href={`/visits/new?lotId=${id}`}>
+              <Button type="button" variant="brand" className="gap-2">
+                <Calendar className="h-4 w-4" />
+                Agendar visita
+              </Button>
+            </Link>
+            <Button type="button" variant="outline" className="gap-2" onClick={() => setInterestOpen(true)}>
+              <HeartHandshake className="h-4 w-4" />
+              Tenho interesse
+            </Button>
+            <a
+              href={`https://wa.me/?text=${encodeURIComponent(
+                `Olá! Gostaria de informações sobre o lote ${lot.number} (${lot.block?.name ?? 'Quadra'}) no empreendimento ${lot.block?.development?.name ?? ''}.`,
+              )}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={cn(buttonVariants({ variant: 'default', size: 'default' }), 'gap-2 bg-success-600 hover:bg-success-700')}
+            >
+              <MessageCircle className="h-4 w-4" />
+              WhatsApp
+            </a>
+          </div>
+        </Card>
 
         <Card className="max-w-md p-6">
           <form onSubmit={handleSubmit(submitLot)} className="space-y-4">
@@ -302,6 +363,7 @@ export default function EditLotPage() {
                 <option value="DISPONIVEL">Disponível</option>
                 <option value="VENDIDO">Vendido</option>
                 <option value="RESERVADO">Reservado</option>
+                <option value="EM_NEGOCIACAO">Em negociação</option>
                 <option value="INDISPONIVEL">Indisponível</option>
               </select>
             </div>
@@ -521,6 +583,13 @@ export default function EditLotPage() {
             defaultTitle={`Divulgação — lote ${lot.number}`}
           />
         ) : null}
+
+        <LotInterestModal
+          open={interestOpen}
+          onOpenChange={setInterestOpen}
+          lotId={id}
+          lotLabel={lotCommercialLabel}
+        />
     </main>
   );
 }

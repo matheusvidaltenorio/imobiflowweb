@@ -20,7 +20,7 @@ const schema = z.object({
   title: z.string().min(2),
   description: z.string().optional(),
   type: z.enum(['CASA', 'APARTAMENTO', 'TERRENO', 'COMERCIAL', 'RURAL']),
-  status: z.enum(['DISPONIVEL', 'VENDIDO', 'RESERVADO', 'INDISPONIVEL']),
+  status: z.enum(['DISPONIVEL', 'VENDIDO', 'RESERVADO', 'EM_NEGOCIACAO', 'INDISPONIVEL']),
   price: z.number().min(0),
   area: z.number().optional(),
   bedrooms: z.number().optional(),
@@ -239,6 +239,7 @@ export default function EditPropertyPage() {
                   <option value="DISPONIVEL">Disponível</option>
                   <option value="VENDIDO">Vendido</option>
                   <option value="RESERVADO">Reservado</option>
+                  <option value="EM_NEGOCIACAO">Em negociação</option>
                   <option value="INDISPONIVEL">Indisponível</option>
                 </select>
               </div>

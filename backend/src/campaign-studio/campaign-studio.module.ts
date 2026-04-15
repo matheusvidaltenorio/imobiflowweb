@@ -13,11 +13,16 @@ import { GeminiCampaignTextService } from './gemini-campaign-text.service';
 import { InstagramPublisherService } from './instagram-publisher.service';
 import { FacebookPublisherService } from './facebook-publisher.service';
 import { WhatsAppDistributionService } from './whatsapp-distribution.service';
+import { CampaignPublicationOpLogService } from './campaign-publication-op-log.service';
+import { ScheduledPublicationOrchestratorService } from './scheduled-publication-orchestrator.service';
+import { PublicationSchedulerService } from './publication-scheduler.service';
+import { PublicationWorkerService } from './publication-worker.service';
 
 @Module({
   imports: [PrismaModule, InstagramAdsModule, CloudinaryModule, SocialModule],
   controllers: [CampaignStudioController],
   providers: [
+    CampaignPublicationOpLogService,
     CampaignStudioService,
     CampaignPublisherService,
     CampaignExportService,
@@ -25,6 +30,9 @@ import { WhatsAppDistributionService } from './whatsapp-distribution.service';
     InstagramPublisherService,
     FacebookPublisherService,
     WhatsAppDistributionService,
+    ScheduledPublicationOrchestratorService,
+    PublicationSchedulerService,
+    PublicationWorkerService,
     MockCampaignImageProvider,
     { provide: CAMPAIGN_IMAGE_PROVIDER, useExisting: MockCampaignImageProvider },
   ],

@@ -16,7 +16,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
-import { UserRole } from '@prisma/client';
+import { PropertyStatus, UserRole } from '@prisma/client';
 
 @Controller('lots')
 export class LotsController {
@@ -50,6 +50,28 @@ export class LotsController {
   @Post(':id/view')
   trackView(@Param('id') id: string) {
     return this.lots.incrementView(id);
+  }
+
+  /** Atalhos comerciais (mesmo comportamento de PATCH /lots/:id com status). */
+  @Post(':id/mark-reserved')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.CORRETOR, UserRole.ADMIN)
+  markReserved(@Param('id') id: string) {
+    return this.lots.setStatus(id, PropertyStatus.RESERVADO);
+  }
+
+  @Post(':id/mark-negotiation')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.CORRETOR, UserRole.ADMIN)
+  markNegotiation(@Param('id') id: string) {
+    return this.lots.setStatus(id, PropertyStatus.EM_NEGOCIACAO);
+  }
+
+  @Post(':id/mark-sold')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.CORRETOR, UserRole.ADMIN)
+  markSold(@Param('id') id: string) {
+    return this.lots.setStatus(id, PropertyStatus.VENDIDO);
   }
 
   @Get('ranking')

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  Clock,
   Copy,
   Download,
   ExternalLink,
@@ -21,6 +22,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/toaster';
 import { cn } from '@/lib/utils';
+import { campaignStatusBadgeClass, labelCampaignStatus } from '@/lib/campaign-status';
 import type { InstagramAdPack } from './instagram-ad-generator';
 
 import { CampaignPlatformPreview, WhatsAppActionHint } from './campaign-previews';
@@ -88,6 +90,16 @@ type CampaignDetail = {
   id: string;
   title: string;
   status: string;
+  scheduledPublishAt?: string | null;
+  scheduleTimezone?: string | null;
+  scheduledChannelsJson?: unknown;
+  scheduledSocialConnectionId?: string | null;
+  autoRetryEnabled?: boolean;
+  maxRetries?: number;
+  retryCount?: number;
+  nextRetryAt?: string | null;
+  publishFailureReason?: string | null;
+  campaignPublishedAt?: string | null;
   packJson: unknown;
   assets: Array<{
     id: string;
@@ -114,6 +126,7 @@ type CampaignDetail = {
 
 type Props = {
   mode: 'lot' | 'development';
+  /** Vazio quando campanha institucional (sem loteamento). */
   developmentId: string;
   lotId?: string;
   defaultTitle?: string;
@@ -121,6 +134,8 @@ type Props = {
   title?: string;
   /** Nome do empreendimento para prévias realistas */
   developmentName?: string;
+  /** Abre campanha existente (edição retomada da lista). */
+  initialCampaignId?: string;
 };
 
 function apiErrorMessage(err: unknown, fallback: string): string {
@@ -148,11 +163,12 @@ export function CampaignStudioWizard({
   defaultTitle,
   title,
   developmentName,
+  initialCampaignId,
 }: Props) {
   const { toast } = useToast();
   const qc = useQueryClient();
-  const [step, setStep] = useState(1);
-  const [campaignId, setCampaignId] = useState<string | null>(null);
+  const [campaignId, setCampaignId] = useState<string | null>(() => initialCampaignId ?? null);
+  const [step, setStep] = useState(() => (initialCampaignId ? 2 : 1));
   const [campaignTitle, setCampaignTitle] = useState(
     defaultTitle ?? (mode === 'lot' ? 'Campanha do lote' : 'Campanha do loteamento'),
   );
@@ -175,7 +191,11 @@ export function CampaignStudioWizard({
   const [useGeminiLlm, setUseGeminiLlm] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<Array<{ file: File; url: string }>>([]);
   const [selectedSocialId, setSelectedSocialId] = useState('');
+  const [scheduleLocal, setScheduleLocal] = useState('');
+  const [scheduleIg, setScheduleIg] = useState(true);
+  const [scheduleFb, setScheduleFb] = useState(true);
   const [showAdvancedJson, setShowAdvancedJson] = useState(false);
+  const [captionTemplateId, setCaptionTemplateId] = useState('lote_individual');
 
   const { data: capabilities } = useQuery({
     queryKey: ['campaign-studio', 'capabilities'],
@@ -199,6 +219,7 @@ export function CampaignStudioWizard({
           facebookPageName: string | null;
           instagramUsername: string | null;
           status: string;
+          isDefault?: boolean;
         }>
       >('/social/connections');
       return data;
@@ -206,20 +227,27 @@ export function CampaignStudioWizard({
   });
 
   useEffect(() => {
-    if (socialConnections?.length && !selectedSocialId) {
-      setSelectedSocialId(socialConnections[0].id);
-    }
-  }, [socialConnections, selectedSocialId]);
+    if (!socialConnections?.length) return;
+    setSelectedSocialId((prev) => {
+      if (prev && socialConnections.some((c) => c.id === prev)) return prev;
+      const def = socialConnections.find((c) => c.isDefault);
+      return def?.id ?? socialConnections[0].id;
+    });
+  }, [socialConnections]);
+
+  useEffect(() => {
+    if (defaultTitle?.trim()) setCampaignTitle(defaultTitle.trim());
+  }, [defaultTitle]);
 
   const { data: campaignList } = useQuery({
-    queryKey: ['campaign-studio', 'list', developmentId],
+    queryKey: ['campaign-studio', 'list', developmentId || 'all'],
     queryFn: async () => {
       const { data } = await api.get<CampaignListItem[]>('/campaign-studio/campaigns', {
-        params: { developmentId },
+        params: developmentId.trim() ? { developmentId } : {},
       });
       return data;
     },
-    enabled: !!developmentId,
+    enabled: !!developmentId.trim() || !!initialCampaignId || !!campaignId,
   });
 
   const { data: bankImages } = useQuery({
@@ -230,7 +258,7 @@ export function CampaignStudioWizard({
       });
       return data.items;
     },
-    enabled: !!developmentId,
+    enabled: !!developmentId.trim(),
   });
 
   const { data: campaign, refetch: refetchCampaign } = useQuery({
@@ -242,13 +270,28 @@ export function CampaignStudioWizard({
     enabled: !!campaignId,
   });
 
+  useEffect(() => {
+    const sp = campaign?.scheduledPublishAt;
+    if (!sp) {
+      setScheduleLocal('');
+      return;
+    }
+    const d = new Date(sp);
+    if (Number.isNaN(d.getTime())) return;
+    const pad = (n: number) => String(n).padStart(2, '0');
+    setScheduleLocal(
+      `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`,
+    );
+  }, [campaign?.scheduledPublishAt]);
+
   const pack = campaign?.packJson as InstagramAdPack | null | undefined;
   const v = pack?.variations[varIndex];
 
   const createCampaign = useMutation({
     mutationFn: async () => {
       const { data } = await api.post<CampaignDetail>('/campaign-studio/campaigns', {
-        developmentId,
+        ...(developmentId.trim() ? { developmentId } : {}),
+        ...(developmentId.trim() ? {} : { campaignKind: 'INSTITUCIONAL' as const }),
         lotId: mode === 'lot' ? lotId : undefined,
         title: campaignTitle.trim(),
         platforms: selectedPlatforms,
@@ -258,13 +301,42 @@ export function CampaignStudioWizard({
     onSuccess: (d) => {
       setCampaignId(d.id);
       qc.setQueryData(['campaign-studio', 'campaign', d.id], d);
-      void qc.invalidateQueries({ queryKey: ['campaign-studio', 'list', developmentId] });
+      void qc.invalidateQueries({ queryKey: ['campaign-studio', 'list'] });
       toast({ title: 'Rascunho criado', type: 'success' });
       setStep(2);
     },
     onError: (err) =>
       toast({
         title: apiErrorMessage(err, 'Erro ao criar campanha'),
+        type: 'error',
+      }),
+  });
+
+  const { data: captionTemplates } = useQuery({
+    queryKey: ['campaign-studio', 'caption-templates'],
+    queryFn: async () => {
+      const { data } = await api.get<Array<{ id: string; label: string }>>('/campaign-studio/caption-templates');
+      return data;
+    },
+  });
+
+  const applyCaptionTemplate = useMutation({
+    mutationFn: async () => {
+      if (!campaignId) throw new Error('no campaign');
+      const { data } = await api.post<CampaignDetail>(
+        `/campaign-studio/campaigns/${campaignId}/apply-caption-template`,
+        { templateId: captionTemplateId },
+      );
+      return data;
+    },
+    onSuccess: async () => {
+      toast({ title: 'Legenda aplicada (template interno)', type: 'success' });
+      await refetchCampaign();
+      setStep(4);
+    },
+    onError: (err) =>
+      toast({
+        title: apiErrorMessage(err, 'Erro ao aplicar template'),
         type: 'error',
       }),
   });
@@ -303,7 +375,12 @@ export function CampaignStudioWizard({
       if (!campaignId || !bankImages?.length) return;
       const items = bankImages
         .filter((b) => bankSelection.has(b.id))
-        .map((b) => ({ url: b.url, publicId: b.publicId ?? undefined, fileName: b.label ?? undefined }));
+        .map((b) => ({
+          url: b.url,
+          publicId: b.publicId ?? undefined,
+          fileName: b.label ?? undefined,
+          sourcePropertyImageId: b.id.startsWith('development-cover:') ? undefined : b.id,
+        }));
       if (!items.length) return;
       await api.post(`/campaign-studio/campaigns/${campaignId}/assets/from-bank`, { items });
     },
@@ -442,7 +519,7 @@ export function CampaignStudioWizard({
         externalPostId?: string;
       }>(`/campaign-studio/campaigns/${campaignId}/publish`, {
         platform: 'INSTAGRAM_FEED',
-        socialConnectionId: selectedSocialId,
+        ...(selectedSocialId.trim() ? { socialConnectionId: selectedSocialId.trim() } : {}),
       });
       return data;
     },
@@ -463,7 +540,7 @@ export function CampaignStudioWizard({
       if (!campaignId) throw new Error('no campaign');
       const { data } = await api.post(`/campaign-studio/campaigns/${campaignId}/publish`, {
         platform: 'FACEBOOK_POST',
-        socialConnectionId: selectedSocialId,
+        ...(selectedSocialId.trim() ? { socialConnectionId: selectedSocialId.trim() } : {}),
       });
       return data;
     },
@@ -569,6 +646,72 @@ export function CampaignStudioWizard({
     () => campaign?.targets?.some((t) => t.platform === 'FACEBOOK_POST') ?? false,
     [campaign?.targets],
   );
+
+  const schedulePublish = useMutation({
+    mutationFn: async () => {
+      if (!campaignId || !scheduleLocal.trim()) throw new Error('no schedule');
+      const iso = new Date(scheduleLocal).toISOString();
+      const channels: string[] = [];
+      if (scheduleIg && hasIgTarget) channels.push('INSTAGRAM_FEED');
+      if (scheduleFb && hasFbTarget) channels.push('FACEBOOK_POST');
+      if (channels.length === 0) {
+        throw new Error('Selecione ao menos um canal (Instagram e/ou Facebook) com alvo na campanha.');
+      }
+      const { data } = await api.patch<CampaignDetail>(`/campaign-studio/campaigns/${campaignId}`, {
+        status: 'SCHEDULED',
+        scheduledPublishAt: iso,
+        scheduledChannels: channels,
+        ...(selectedSocialId.trim() ? { scheduledSocialConnectionId: selectedSocialId.trim() } : {}),
+        autoRetryEnabled: true,
+        maxRetries: campaign?.maxRetries ?? 3,
+      });
+      return data;
+    },
+    onSuccess: () => {
+      toast({
+        title: 'Publicação agendada',
+        description: 'O sistema publicará automaticamente no horário.',
+        type: 'success',
+      });
+      void refetchCampaign();
+    },
+    onError: (err) =>
+      toast({
+        title:
+          err instanceof Error && err.message && !err.message.startsWith('no schedule')
+            ? err.message
+            : apiErrorMessage(err, 'Não foi possível agendar'),
+        type: 'error',
+      }),
+  });
+
+  const cancelSchedule = useMutation({
+    mutationFn: async () => {
+      if (!campaignId) return;
+      const { data } = await api.post<CampaignDetail>(`/campaign-studio/campaigns/${campaignId}/cancel-schedule`);
+      return data;
+    },
+    onSuccess: () => {
+      toast({ title: 'Agendamento cancelado', type: 'success' });
+      void refetchCampaign();
+    },
+    onError: (err) =>
+      toast({ title: apiErrorMessage(err, 'Não foi possível cancelar'), type: 'error' }),
+  });
+
+  const retryPublish = useMutation({
+    mutationFn: async () => {
+      if (!campaignId) return;
+      const { data } = await api.post<CampaignDetail>(`/campaign-studio/campaigns/${campaignId}/retry-publish`);
+      return data;
+    },
+    onSuccess: () => {
+      toast({ title: 'Campanha recolocada na fila', type: 'success' });
+      void refetchCampaign();
+    },
+    onError: (err) =>
+      toast({ title: apiErrorMessage(err, 'Não foi possível reprocessar'), type: 'error' }),
+  });
 
   const downloadPrimaryImage = useCallback(() => {
     const url = primaryPreviewUrl;
@@ -723,6 +866,39 @@ export function CampaignStudioWizard({
 
       {step === 2 && campaignId ? (
         <div className="space-y-4">
+          <Card className="border-primary-100 bg-primary-50/40 p-4">
+            <p className="text-sm font-semibold text-primary-950">Legenda sem IA (templates internos)</p>
+            <p className="mt-1 text-xs text-slate-600">
+              Monta texto por plataforma com blocos prontos. Útil para rascunho rápido ou quando não há loteamento
+              vinculado ao gerador de anúncios.
+            </p>
+            <div className="mt-3 flex flex-wrap items-end gap-2">
+              <div className="min-w-[200px] flex-1">
+                <Label className="text-xs">Template</Label>
+                <select
+                  className="mt-1 flex h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                  value={captionTemplateId}
+                  onChange={(e) => setCaptionTemplateId(e.target.value)}
+                >
+                  {(captionTemplates ?? []).map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={applyCaptionTemplate.isPending}
+                onClick={() => applyCaptionTemplate.mutate()}
+                className="gap-2"
+              >
+                {applyCaptionTemplate.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
+                Aplicar template
+              </Button>
+            </div>
+          </Card>
           <p className="text-sm text-gray-600">
             Usa o mesmo motor de contexto do ranking comercial (lote / loteamento). Depois de gerar, as legendas são
             gravadas por plataforma.
@@ -1112,6 +1288,108 @@ export function CampaignStudioWizard({
 
       {step === 5 && campaignId ? (
         <div className="space-y-6">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-semibold text-primary-950">Status</span>
+            <span
+              className={cn(
+                'rounded-full px-2.5 py-0.5 text-xs font-bold',
+                campaignStatusBadgeClass(campaign?.status ?? 'DRAFT'),
+              )}
+            >
+              {labelCampaignStatus(campaign?.status ?? 'DRAFT')}
+            </span>
+          </div>
+          {campaign?.publishFailureReason ? (
+            <p className="rounded-lg border border-red-100 bg-red-50/80 px-3 py-2 text-xs text-red-900">
+              {campaign.publishFailureReason}
+            </p>
+          ) : null}
+          {campaign?.nextRetryAt ? (
+            <p className="text-xs text-slate-600">
+              Próxima tentativa automática: {new Date(campaign.nextRetryAt).toLocaleString('pt-BR')}
+            </p>
+          ) : null}
+
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <p className="flex items-center gap-2 text-sm font-semibold text-primary-950">
+              <Clock className="h-4 w-4" />
+              Agendar publicação automática
+            </p>
+            <p className="mt-1 text-xs text-slate-600">
+              O servidor publica nos canais marcados no horário. Requer Meta conectada e conteúdo pronto para cada rede.
+            </p>
+            <div className="mt-3 flex flex-wrap items-end gap-4">
+              <div>
+                <Label className="text-xs">Data e hora</Label>
+                <Input
+                  type="datetime-local"
+                  className="mt-1 h-9 w-[220px] text-xs"
+                  value={scheduleLocal}
+                  onChange={(e) => setScheduleLocal(e.target.value)}
+                />
+              </div>
+              <label className="flex items-center gap-2 text-xs">
+                <input
+                  type="checkbox"
+                  checked={scheduleIg && hasIgTarget}
+                  disabled={!hasIgTarget}
+                  onChange={(e) => setScheduleIg(e.target.checked)}
+                />
+                Instagram feed
+              </label>
+              <label className="flex items-center gap-2 text-xs">
+                <input
+                  type="checkbox"
+                  checked={scheduleFb && hasFbTarget}
+                  disabled={!hasFbTarget}
+                  onChange={(e) => setScheduleFb(e.target.checked)}
+                />
+                Facebook post
+              </label>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="brand"
+                size="sm"
+                className="gap-1.5"
+                disabled={
+                  schedulePublish.isPending ||
+                  !scheduleLocal.trim() ||
+                  !socialConnections?.length ||
+                  (!hasIgTarget && !hasFbTarget)
+                }
+                onClick={() => schedulePublish.mutate()}
+              >
+                {schedulePublish.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                Agendar publicação
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={
+                  cancelSchedule.isPending ||
+                  !['SCHEDULED', 'QUEUED', 'RETRYING'].includes(campaign?.status ?? '')
+                }
+                onClick={() => cancelSchedule.mutate()}
+              >
+                Cancelar agendamento
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={
+                  retryPublish.isPending || !['FAILED', 'RETRYING'].includes(campaign?.status ?? '')
+                }
+                onClick={() => retryPublish.mutate()}
+              >
+                Tentar novamente
+              </Button>
+            </div>
+          </div>
+
           <div className="rounded-xl border border-primary-100 bg-white p-4 shadow-sm">
             <p className="text-sm font-semibold text-primary-950">Conexão Meta (Instagram &amp; Facebook)</p>
             <p className="mt-1 text-xs text-slate-600">
@@ -1164,7 +1442,7 @@ export function CampaignStudioWizard({
                 type="button"
                 variant="brand"
                 className="gap-2"
-                disabled={publishInstagram.isPending || !selectedSocialId || !hasIgTarget}
+                disabled={publishInstagram.isPending || !socialConnections?.length || !hasIgTarget}
                 onClick={() => publishInstagram.mutate()}
               >
                 {publishInstagram.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
@@ -1174,7 +1452,7 @@ export function CampaignStudioWizard({
                 type="button"
                 variant="brand"
                 className="gap-2"
-                disabled={publishFacebook.isPending || !selectedSocialId || !hasFbTarget}
+                disabled={publishFacebook.isPending || !socialConnections?.length || !hasFbTarget}
                 onClick={() => publishFacebook.mutate()}
               >
                 {publishFacebook.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}

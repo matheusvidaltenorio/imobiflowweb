@@ -104,3 +104,93 @@ export function buildCampaignCopyUpsertOperations(
     };
   });
 }
+
+/** Legenda montada manualmente / templates (sem pack de anúncio Instagram). */
+export function buildPlainCopyUpserts(
+  campaignId: string,
+  platforms: PublicationPlatform[],
+  p: {
+    headline: string;
+    feedCaption: string;
+    shortCaption: string;
+    storyText: string;
+    whatsapp: string;
+    cta: string;
+    hashtags: string;
+  },
+): Prisma.CampaignCopyUpsertArgs[] {
+  const base = {
+    title: p.headline,
+    cta: p.cta,
+    hashtags: p.hashtags,
+    professionalTone: p.feedCaption,
+    persuasiveTone: p.feedCaption,
+    directTone: p.shortCaption,
+    justification: 'Legenda montada com template interno (sem motor de IA).',
+  };
+
+  const body = (
+    platform: PublicationPlatform,
+  ): Pick<
+    Prisma.CampaignCopyUncheckedCreateInput,
+    'caption' | 'shortCaption' | 'reelScriptJson'
+  > => {
+    switch (platform) {
+      case 'INSTAGRAM_FEED':
+        return { caption: p.feedCaption, shortCaption: p.shortCaption, reelScriptJson: Prisma.DbNull };
+      case 'INSTAGRAM_STORY':
+        return {
+          caption: p.storyText,
+          shortCaption: p.storyText.slice(0, 220),
+          reelScriptJson: Prisma.DbNull,
+        };
+      case 'INSTAGRAM_REEL':
+        return {
+          caption: `${p.headline}\n\n${p.feedCaption}\n\n${p.cta}`,
+          shortCaption: p.shortCaption,
+          reelScriptJson: Prisma.DbNull,
+        };
+      case 'FACEBOOK_POST':
+        return {
+          caption: `${p.headline}\n\n${p.feedCaption}`,
+          shortCaption: p.shortCaption,
+          reelScriptJson: Prisma.DbNull,
+        };
+      case 'WHATSAPP':
+        return {
+          caption: p.whatsapp,
+          shortCaption: p.whatsapp.slice(0, 300),
+          reelScriptJson: Prisma.DbNull,
+        };
+      case 'EXPORT_PACKAGE':
+        return {
+          caption: [p.headline, '', p.feedCaption, '', p.storyText, '', p.whatsapp, '', p.cta, p.hashtags].join(
+            '\n',
+          ),
+          shortCaption: p.shortCaption,
+          reelScriptJson: Prisma.DbNull,
+        };
+      default:
+        return { caption: p.feedCaption, shortCaption: p.shortCaption, reelScriptJson: Prisma.DbNull };
+    }
+  };
+
+  return platforms.map((platform) => {
+    const extra = body(platform);
+    return {
+      where: {
+        campaignId_platform: { campaignId, platform },
+      },
+      create: {
+        campaignId,
+        platform,
+        ...base,
+        ...extra,
+      },
+      update: {
+        ...base,
+        ...extra,
+      },
+    };
+  });
+}

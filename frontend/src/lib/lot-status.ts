@@ -2,6 +2,7 @@
 export const LOT_STATUS_LABEL: Record<string, string> = {
   DISPONIVEL: 'Disponível',
   RESERVADO: 'Reservado',
+  EM_NEGOCIACAO: 'Em negociação',
   VENDIDO: 'Vendido',
   INDISPONIVEL: 'Indisponível',
 };

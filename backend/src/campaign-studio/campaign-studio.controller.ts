@@ -26,6 +26,7 @@ import { AddBankAssetsDto, PatchAssetDto } from './dto/campaign-assets.dto';
 import { GenerateAiImageDto, SuggestedImagePromptDto } from './dto/ai-image.dto';
 import { DuplicateCampaignDto } from './dto/duplicate-campaign.dto';
 import { PublishCampaignDto } from './dto/publish-campaign.dto';
+import { ApplyCaptionTemplateDto } from './dto/apply-caption-template.dto';
 
 @Controller('campaign-studio')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -36,6 +37,20 @@ export class CampaignStudioController {
   @Get('capabilities')
   capabilities() {
     return this.studio.getCapabilities();
+  }
+
+  @Get('caption-templates')
+  captionTemplates() {
+    return this.studio.captionTemplates();
+  }
+
+  @Get('publication-ops/summary')
+  @Roles(UserRole.ADMIN)
+  publicationOpsSummary(
+    @CurrentUser('id') userId: string,
+    @CurrentUser('role') role: UserRole,
+  ) {
+    return this.studio.publicationOpsSummary(userId, role);
   }
 
   @Post('campaigns')
@@ -52,8 +67,22 @@ export class CampaignStudioController {
     @CurrentUser('id') userId: string,
     @CurrentUser('role') role: UserRole,
     @Query('developmentId') developmentId?: string,
+    @Query('lotId') lotId?: string,
+    @Query('status') status?: string,
+    @Query('campaignKind') campaignKind?: string,
+    @Query('userId') userIdFilter?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
   ) {
-    return this.studio.list(userId, role, developmentId);
+    return this.studio.list(userId, role, {
+      developmentId,
+      lotId,
+      status,
+      campaignKind,
+      userIdFilter,
+      from,
+      to,
+    });
   }
 
   @Get('campaigns/:id')
@@ -63,6 +92,33 @@ export class CampaignStudioController {
     @Param('id') id: string,
   ) {
     return this.studio.getById(userId, role, id);
+  }
+
+  @Get('campaigns/:id/publication-op-logs')
+  publicationOpLogs(
+    @CurrentUser('id') userId: string,
+    @CurrentUser('role') role: UserRole,
+    @Param('id') id: string,
+  ) {
+    return this.studio.listPublicationOpLogs(userId, role, id);
+  }
+
+  @Post('campaigns/:id/cancel-schedule')
+  cancelSchedule(
+    @CurrentUser('id') userId: string,
+    @CurrentUser('role') role: UserRole,
+    @Param('id') id: string,
+  ) {
+    return this.studio.cancelSchedule(userId, role, id);
+  }
+
+  @Post('campaigns/:id/retry-publish')
+  retryPublish(
+    @CurrentUser('id') userId: string,
+    @CurrentUser('role') role: UserRole,
+    @Param('id') id: string,
+  ) {
+    return this.studio.retryPublishManual(userId, role, id);
   }
 
   @Patch('campaigns/:id')
@@ -144,6 +200,16 @@ export class CampaignStudioController {
     @Param('assetId') assetId: string,
   ) {
     return this.studio.deleteAsset(userId, role, id, assetId);
+  }
+
+  @Post('campaigns/:id/apply-caption-template')
+  applyCaptionTemplate(
+    @CurrentUser('id') userId: string,
+    @CurrentUser('role') role: UserRole,
+    @Param('id') id: string,
+    @Body() dto: ApplyCaptionTemplateDto,
+  ) {
+    return this.studio.applyCaptionTemplate(userId, role, id, dto.templateId);
   }
 
   @Post('campaigns/:id/generate-text')

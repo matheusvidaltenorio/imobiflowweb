@@ -37,6 +37,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       '/publication',
       '/integrations',
       '/melhores-lotes',
+      '/analytics',
     ];
     if (brokerRoutes.some((r) => pathname?.startsWith(r)) && user.role === 'CLIENTE') {
       router.replace('/');

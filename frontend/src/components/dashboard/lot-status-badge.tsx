@@ -1,14 +1,16 @@
 import { Badge } from '@/components/ui/badge';
 import { lotStatusLabel } from '@/lib/lot-status';
 
-type LotStatus = 'DISPONIVEL' | 'RESERVADO' | 'VENDIDO' | 'INDISPONIVEL' | string;
+type LotStatus = 'DISPONIVEL' | 'RESERVADO' | 'EM_NEGOCIACAO' | 'VENDIDO' | 'INDISPONIVEL' | string;
 
-function variantForStatus(status: LotStatus): 'success' | 'warning' | 'danger' | 'muted' {
+function variantForStatus(status: LotStatus): 'success' | 'warning' | 'info' | 'danger' | 'muted' {
   switch (status) {
     case 'DISPONIVEL':
       return 'success';
     case 'RESERVADO':
       return 'warning';
+    case 'EM_NEGOCIACAO':
+      return 'info';
     case 'VENDIDO':
       return 'danger';
     case 'INDISPONIVEL':

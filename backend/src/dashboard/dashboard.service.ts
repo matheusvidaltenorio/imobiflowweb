@@ -100,7 +100,19 @@ export class DashboardService {
         where: {
           AND: [
             leadWhere,
-            { status: { in: ['VENDIDO', 'PERDIDO', 'NEGOCIACAO', 'QUALIFICACAO', 'PROSPECCAO'] } },
+            {
+              status: {
+                in: [
+                  'NOVO_LEAD',
+                  'EM_ATENDIMENTO',
+                  'VISITA_AGENDADA',
+                  'PROPOSTA_ENVIADA',
+                  'RESERVADO',
+                  'VENDIDO',
+                  'PERDIDO',
+                ],
+              },
+            },
           ],
         },
       }),
@@ -184,6 +196,7 @@ export class DashboardService {
       clientsCount,
       lotsAvailable: lotsStatusMap['DISPONIVEL'] ?? 0,
       lotsReserved: lotsStatusMap['RESERVADO'] ?? 0,
+      lotsInNegotiation: lotsStatusMap['EM_NEGOCIACAO'] ?? 0,
       lotsSold: lotsStatusMap['VENDIDO'] ?? 0,
       lotsUnavailable: lotsStatusMap['INDISPONIVEL'] ?? 0,
       leadsByStage: leadsByStage.map((r) => ({ status: r.status, count: r._count })),

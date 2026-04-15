@@ -37,6 +37,7 @@ import {
   DEV_FALLBACK_RADIUS_EXACT_M,
 } from '@/lib/maps/loteamento-map-constants';
 import { cn, formatPrice } from '@/lib/utils';
+import { lotStatusLabel } from '@/lib/lot-status';
 import { LocationPrecisionBadge, type DevelopmentLocationPrecision } from '@/components/developments/location-precision-badge';
 import { MapLegend } from '@/components/maps/map-legend';
 import { LoteamentoAreaLayer } from '@/components/maps/loteamento-area-layer';
@@ -141,6 +142,7 @@ function hasPlottablePosition(lot: GeoMapLot): boolean {
 type FilterState = {
   DISPONIVEL: boolean;
   RESERVADO: boolean;
+  EM_NEGOCIACAO: boolean;
   VENDIDO: boolean;
   INDISPONIVEL: boolean;
   championOnly: boolean;
@@ -153,6 +155,7 @@ type FilterState = {
 const defaultFilters: FilterState = {
   DISPONIVEL: true,
   RESERVADO: true,
+  EM_NEGOCIACAO: true,
   VENDIDO: true,
   INDISPONIVEL: true,
   championOnly: false,
@@ -202,7 +205,7 @@ function infoWindowInner(
       <p className="text-xs text-gray-600">Quadra {lot.blockName}</p>
       <p className="text-sm font-semibold">{formatPrice(Number(lot.price ?? 0))}</p>
       {lot.area != null ? <p className="text-xs">{lot.area} m²</p> : null}
-      <p className="text-xs uppercase text-gray-500">{lot.status}</p>
+      <p className="text-xs font-semibold text-gray-600">{lotStatusLabel(lot.status)}</p>
       {lot.saleScore != null ? (
         <p className="text-xs font-bold text-primary-800">Score {Math.round(lot.saleScore)}</p>
       ) : null}
@@ -311,6 +314,7 @@ export function DevelopmentLotsMap({
     return lots.filter((l) => {
       if (l.status === 'DISPONIVEL' && !filters.DISPONIVEL) return false;
       if (l.status === 'RESERVADO' && !filters.RESERVADO) return false;
+      if (l.status === 'EM_NEGOCIACAO' && !filters.EM_NEGOCIACAO) return false;
       if (l.status === 'VENDIDO' && !filters.VENDIDO) return false;
       if (l.status === 'INDISPONIVEL' && !filters.INDISPONIVEL) return false;
       if (filters.championOnly && !l.isChampion) return false;
@@ -1022,6 +1026,7 @@ export function DevelopmentLotsMap({
                 [
                   ['DISPONIVEL', 'Disponível'],
                   ['RESERVADO', 'Reservado'],
+                  ['EM_NEGOCIACAO', 'Em negociação'],
                   ['VENDIDO', 'Vendido'],
                   ['INDISPONIVEL', 'Indisponível'],
                 ] as const

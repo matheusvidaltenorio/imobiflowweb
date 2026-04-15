@@ -5,7 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { UserRole, LeadStatus } from '@prisma/client';
+import { UserRole, LeadStatus, PropertyStatus, Prisma } from '@prisma/client';
 import { sanitizeInput } from '../common/utils/xss.util';
 import { LotScoringService } from '../lot-scoring/lot-scoring.service';
 import { ClosingPredictionService } from '../closing-prediction/closing-prediction.service';
@@ -18,10 +18,21 @@ const ALLOWED_LEAD_SOURCES = [
   'INSTAGRAM',
   'FACEBOOK',
   'OUTRO',
+  'TRÁFEGO_PAGO',
+  'TRAFICO_PAGO',
 ] as const;
+
+/** Ações rápidas do CRM (lead detail / pipeline). */
+export type CommercialLeadAction =
+  | 'WHATSAPP'
+  | 'PROPOSTA'
+  | 'RESERVA'
+  | 'VENDA'
+  | 'PERDA';
 
 const leadInclude = {
   property: { select: { id: true, title: true, price: true, userId: true } },
+  development: { select: { id: true, name: true, city: true } },
   lot: {
     select: {
       id: true,
@@ -40,8 +51,18 @@ const leadInclude = {
       },
     },
   },
-  interactions: { orderBy: { createdAt: 'desc' as const }, take: 20 },
+  interactions: { orderBy: { createdAt: 'desc' as const }, take: 50 },
 } as const;
+
+export type LeadsListFilters = {
+  status?: LeadStatus;
+  developmentId?: string;
+  assignedUserId?: string;
+  leadSource?: string;
+  from?: string;
+  to?: string;
+  priority?: 'hot' | 'stale';
+};
 
 @Injectable()
 export class LeadsService {
@@ -84,10 +105,26 @@ export class LeadsService {
     return admin.id;
   }
 
+  private async activityOwnerForDevelopment(developmentId: string): Promise<string> {
+    const prop = await this.prisma.property.findFirst({
+      where: { developmentId },
+      select: { userId: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    if (prop?.userId) return prop.userId;
+    const admin = await this.prisma.user.findFirst({
+      where: { role: UserRole.ADMIN },
+      select: { id: true },
+    });
+    if (!admin) throw new BadRequestException('Não foi possível associar o lead a um corretor');
+    return admin.id;
+  }
+
   async create(
     data: {
       propertyId?: string;
       lotId?: string;
+      developmentId?: string;
       name: string;
       email: string;
       phone?: string;
@@ -99,8 +136,9 @@ export class LeadsService {
     },
     ip?: string,
   ) {
-    if ((!data.propertyId && !data.lotId) || (data.propertyId && data.lotId)) {
-      throw new BadRequestException('Informe propertyId (imóvel) ou lotId (lote), não ambos');
+    const keys = [data.propertyId, data.lotId, data.developmentId].filter(Boolean);
+    if (keys.length !== 1) {
+      throw new BadRequestException('Informe exatamente um de: propertyId, lotId ou developmentId');
     }
 
     let activityUserId: string;
@@ -109,18 +147,27 @@ export class LeadsService {
       const property = await this.prisma.property.findUnique({ where: { id: data.propertyId } });
       if (!property) throw new NotFoundException('Imóvel não encontrado');
       activityUserId = property.userId;
+    } else if (data.lotId) {
+      activityUserId = await this.activityOwnerForLot(data.lotId);
     } else {
-      activityUserId = await this.activityOwnerForLot(data.lotId!);
+      const dev = await this.prisma.development.findUnique({ where: { id: data.developmentId! } });
+      if (!dev) throw new NotFoundException('Loteamento não encontrado');
+      activityUserId = await this.activityOwnerForDevelopment(data.developmentId!);
     }
 
-    const src = data.leadSource?.toUpperCase();
+    const src = data.leadSource?.toUpperCase().replace('Á', 'A');
+    const normalizedSrc =
+      src === 'TRAFICO_PAGO' || src === 'TRÁFEGO_PAGO' ? 'TRAFICO_PAGO' : src;
     const leadSource =
-      src && (ALLOWED_LEAD_SOURCES as readonly string[]).includes(src) ? src : undefined;
+      normalizedSrc && (ALLOWED_LEAD_SOURCES as readonly string[]).includes(normalizedSrc)
+        ? normalizedSrc
+        : undefined;
 
     const lead = await this.prisma.lead.create({
       data: {
         propertyId: data.propertyId ?? null,
         lotId: data.lotId ?? null,
+        developmentId: data.developmentId ?? null,
         userId: data.userId,
         clientId: data.clientId,
         name: sanitizeInput(data.name),
@@ -156,7 +203,11 @@ export class LeadsService {
         action: 'LEAD',
         entity: 'Lead',
         entityId: lead.id,
-        metadata: { propertyId: data.propertyId, lotId: data.lotId } as object,
+        metadata: {
+          propertyId: data.propertyId,
+          lotId: data.lotId,
+          developmentId: data.developmentId,
+        } as object,
         ipAddress: ip,
       },
     });
@@ -173,6 +224,7 @@ export class LeadsService {
     userId: string,
     role: UserRole,
     sort?: 'closing' | 'risk' | 'recent',
+    filters?: LeadsListFilters,
   ) {
     const propertyRows = await this.prisma.property.findMany({
       where: role === UserRole.ADMIN ? {} : { userId },
@@ -182,17 +234,57 @@ export class LeadsService {
 
     const devIds = await this.brokerDevelopmentIds(userId, role);
 
-    const or: Array<Record<string, unknown>> = [];
+    const or: Prisma.LeadWhereInput[] = [];
     if (propertyIds.length) or.push({ propertyId: { in: propertyIds } });
     if (role === UserRole.ADMIN) {
       or.push({ lotId: { not: null } });
+      or.push({ developmentId: { not: null } });
     } else if (devIds.length) {
       or.push({
         lot: { block: { developmentId: { in: devIds } } },
       });
+      or.push({ developmentId: { in: devIds } });
     }
 
     if (!or.length) return [];
+
+    const and: Prisma.LeadWhereInput[] = [{ OR: or }];
+
+    if (filters?.status) and.push({ status: filters.status });
+    if (filters?.assignedUserId) and.push({ userId: filters.assignedUserId });
+    if (filters?.leadSource) {
+      and.push({
+        OR: [{ leadSource: filters.leadSource }, { source: filters.leadSource }],
+      });
+    }
+    if (filters?.developmentId) {
+      and.push({
+        OR: [
+          { developmentId: filters.developmentId },
+          { lot: { block: { developmentId: filters.developmentId } } },
+        ],
+      });
+    }
+    if (filters?.from || filters?.to) {
+      and.push({
+        createdAt: {
+          ...(filters.from ? { gte: new Date(filters.from) } : {}),
+          ...(filters.to ? { lte: new Date(filters.to) } : {}),
+        },
+      });
+    }
+    if (filters?.priority === 'hot') {
+      and.push({ isHot: true });
+    }
+    if (filters?.priority === 'stale') {
+      const cutoff = new Date(Date.now() - 7 * 86400000);
+      and.push({
+        OR: [
+          { leadLastInteractionAt: { lt: cutoff } },
+          { leadLastInteractionAt: null },
+        ],
+      });
+    }
 
     const orderBy =
       sort === 'closing'
@@ -204,7 +296,7 @@ export class LeadsService {
             : { createdAt: 'desc' as const };
 
     return this.prisma.lead.findMany({
-      where: { OR: or },
+      where: { AND: and },
       include: leadInclude,
       orderBy,
     });
@@ -223,7 +315,11 @@ export class LeadsService {
   }
 
   private async canAccessLead(
-    lead: { property?: { userId: string } | null; lot?: { block: { developmentId: string } } | null },
+    lead: {
+      property?: { userId: string } | null;
+      lot?: { block: { developmentId: string } } | null;
+      developmentId?: string | null;
+    },
     userId: string,
     role: UserRole,
   ): Promise<boolean> {
@@ -235,7 +331,191 @@ export class LeadsService {
       });
       return !!p;
     }
+    if (lead.developmentId) {
+      const p = await this.prisma.property.findFirst({
+        where: { userId, developmentId: lead.developmentId },
+      });
+      return !!p;
+    }
     return false;
+  }
+
+  async patchLead(
+    leadId: string,
+    userId: string,
+    role: UserRole,
+    data: {
+      notes?: string | null;
+      nextFollowUpAt?: string | null;
+      developmentId?: string | null;
+      assignedUserId?: string | null;
+      clientId?: string | null;
+      lostReason?: string | null;
+    },
+  ) {
+    const lead = await this.prisma.lead.findUnique({
+      where: { id: leadId },
+      include: leadInclude,
+    });
+    if (!lead) throw new NotFoundException('Lead não encontrado');
+    if (!(await this.canAccessLead(lead, userId, role))) {
+      throw new ForbiddenException('Sem permissão');
+    }
+
+    const patch: Prisma.LeadUpdateInput = {};
+    if (data.notes !== undefined) patch.notes = data.notes ? sanitizeInput(data.notes) : null;
+    if (data.nextFollowUpAt !== undefined) {
+      patch.nextFollowUpAt = data.nextFollowUpAt ? new Date(data.nextFollowUpAt) : null;
+    }
+    if (data.developmentId !== undefined) {
+      patch.development = data.developmentId
+        ? { connect: { id: data.developmentId } }
+        : { disconnect: true };
+    }
+    if (data.assignedUserId !== undefined) {
+      patch.user = data.assignedUserId
+        ? { connect: { id: data.assignedUserId } }
+        : { disconnect: true };
+    }
+    if (data.clientId !== undefined) {
+      patch.client = data.clientId ? { connect: { id: data.clientId } } : { disconnect: true };
+    }
+    if (data.lostReason !== undefined) {
+      patch.lostReason = data.lostReason ? sanitizeInput(data.lostReason) : null;
+    }
+
+    await this.prisma.lead.update({
+      where: { id: leadId },
+      data: patch,
+    });
+
+    await this.closing.recalculateLead(leadId);
+
+    return this.prisma.lead.findUniqueOrThrow({
+      where: { id: leadId },
+      include: leadInclude,
+    });
+  }
+
+  /**
+   * Ações comerciais rápidas: atualizam estágio, lote e registram interação.
+   * RESERVA/VENDA exigem lote vinculado ao lead.
+   */
+  async commercialAction(
+    leadId: string,
+    userId: string,
+    role: UserRole,
+    action: CommercialLeadAction,
+    payload?: { lostReason?: string },
+  ) {
+    const lead = await this.prisma.lead.findUnique({
+      where: { id: leadId },
+      include: leadInclude,
+    });
+    if (!lead) throw new NotFoundException('Lead não encontrado');
+    if (!(await this.canAccessLead(lead, userId, role))) {
+      throw new ForbiddenException('Sem permissão');
+    }
+
+    switch (action) {
+      case 'WHATSAPP':
+        await this.addInteraction(leadId, userId, role, {
+          type: 'WHATSAPP',
+          notes: 'Contato / intenção WhatsApp',
+        });
+        break;
+
+      case 'PROPOSTA':
+        await this.updateStatus(leadId, userId, role, LeadStatus.PROPOSTA_ENVIADA);
+        await this.addInteraction(leadId, userId, role, {
+          type: 'PROPOSTA',
+          notes: 'Proposta enviada (ação rápida)',
+        });
+        break;
+
+      case 'RESERVA':
+        if (!lead.lotId) {
+          throw new BadRequestException('Associe um lote ao lead para marcar reserva');
+        }
+        await this.prisma.$transaction([
+          this.prisma.lot.update({
+            where: { id: lead.lotId },
+            data: { status: PropertyStatus.RESERVADO },
+          }),
+          this.prisma.lead.update({
+            where: { id: leadId },
+            data: { status: LeadStatus.RESERVADO },
+          }),
+          this.prisma.leadInteraction.create({
+            data: {
+              leadId,
+              userId,
+              type: 'RESERVA',
+              body: 'Lote marcado como reservado',
+            },
+          }),
+        ]);
+        await this.scoring.recalculateLotDevelopmentByLotId(lead.lotId);
+        await this.closing.recalculateLead(leadId);
+        break;
+
+      case 'VENDA':
+        if (!lead.lotId) {
+          throw new BadRequestException('Associe um lote ao lead para marcar venda');
+        }
+        await this.prisma.$transaction([
+          this.prisma.lot.update({
+            where: { id: lead.lotId },
+            data: { status: PropertyStatus.VENDIDO },
+          }),
+          this.prisma.lead.update({
+            where: { id: leadId },
+            data: { status: LeadStatus.VENDIDO },
+          }),
+          this.prisma.leadInteraction.create({
+            data: {
+              leadId,
+              userId,
+              type: 'VENDA',
+              body: 'Venda registrada no pipeline',
+            },
+          }),
+        ]);
+        await this.scoring.recalculateLotDevelopmentByLotId(lead.lotId);
+        await this.closing.recalculateLead(leadId);
+        break;
+
+      case 'PERDA': {
+        const reason = payload?.lostReason?.trim()
+          ? sanitizeInput(payload.lostReason)
+          : 'Marcado como perdido (ação rápida)';
+        await this.prisma.lead.update({
+          where: { id: leadId },
+          data: {
+            status: LeadStatus.PERDIDO,
+            lostReason: reason,
+          },
+        });
+        await this.prisma.leadInteraction.create({
+          data: {
+            leadId,
+            userId,
+            type: 'PERDA',
+            body: reason,
+          },
+        });
+        await this.closing.recalculateLead(leadId);
+        break;
+      }
+
+      default:
+        throw new BadRequestException('Ação inválida');
+    }
+
+    return this.prisma.lead.findUniqueOrThrow({
+      where: { id: leadId },
+      include: leadInclude,
+    });
   }
 
   async updateStatus(leadId: string, userId: string, role: UserRole, status: LeadStatus) {
@@ -248,12 +528,14 @@ export class LeadsService {
       throw new ForbiddenException('Sem permissão');
     }
 
-    const wasNegotiation =
-      lead.status === LeadStatus.NEGOCIACAO || lead.status === LeadStatus.VENDIDO;
-    const nowNegotiation = status === LeadStatus.NEGOCIACAO;
+    const wasPastProposta =
+      lead.status === LeadStatus.PROPOSTA_ENVIADA ||
+      lead.status === LeadStatus.RESERVADO ||
+      lead.status === LeadStatus.VENDIDO;
+    const nowProposta = status === LeadStatus.PROPOSTA_ENVIADA;
 
     await this.prisma.$transaction(async (tx) => {
-      if (lead.lotId && !wasNegotiation && nowNegotiation) {
+      if (lead.lotId && !wasPastProposta && nowProposta) {
         await tx.lot.update({
           where: { id: lead.lotId },
           data: { proposalsCount: { increment: 1 } },
@@ -305,7 +587,11 @@ export class LeadsService {
       const isHot = count >= HOT_INTERACTION_THRESHOLD;
       await tx.lead.update({
         where: { id: leadId },
-        data: { interactionCount: count, isHot },
+        data: {
+          interactionCount: count,
+          isHot,
+          leadLastInteractionAt: new Date(),
+        },
       });
     });
 
@@ -337,7 +623,11 @@ export class LeadsService {
       }),
       this.prisma.lead.update({
         where: { id: leadId },
-        data: { interactionCount: count, isHot },
+        data: {
+          interactionCount: count,
+          isHot,
+          leadLastInteractionAt: new Date(),
+        },
       }),
     ]);
 

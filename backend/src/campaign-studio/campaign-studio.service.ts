@@ -10,6 +10,8 @@ import {
   AiImageJobStatus,
   CampaignAssetKind,
   CampaignAssetOrigin,
+  MarketingCampaignKind,
+  MarketingCampaignStatus,
   Prisma,
   PublicationPlatform,
   PublicationTargetStatus,
@@ -18,13 +20,19 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { InstagramAdsService } from '../instagram-ads/instagram-ads.service';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
-import { buildCampaignCopyUpsertOperations } from './campaign-copy.mapper';
+import { buildCampaignCopyUpsertOperations, buildPlainCopyUpserts } from './campaign-copy.mapper';
+import {
+  buildPlainCaption,
+  isValidTemplateId,
+  listCaptionTemplateMeta,
+} from './campaign-plain-templates';
 import { CampaignPublisherService } from './campaign-publisher.service';
 import { CampaignExportService } from './campaign-export.service';
 import { InstagramPublisherService } from './instagram-publisher.service';
 import { FacebookPublisherService } from './facebook-publisher.service';
 import { WhatsAppDistributionService } from './whatsapp-distribution.service';
 import { MetaOAuthService } from '../social/meta-oauth.service';
+import { SocialConnectionService } from '../social/social-connection.service';
 import type { PublishCampaignDto } from './dto/publish-campaign.dto';
 import type { CreateCampaignDto } from './dto/create-campaign.dto';
 import type { UpdateCampaignDto } from './dto/update-campaign.dto';
@@ -37,13 +45,23 @@ import {
 } from './image-generation/campaign-image-provider.token';
 import { GeminiCampaignTextService } from './gemini-campaign-text.service';
 import type { InstagramAdPack } from '../instagram-ads/instagram-ads.engine';
+import { CampaignPublicationOpLogService } from './campaign-publication-op-log.service';
 
 const campaignDetailInclude = {
   assets: { orderBy: { sortOrder: 'asc' as const } },
   targets: true,
   copies: true,
+  user: { select: { id: true, name: true, email: true } },
   development: { select: { id: true, name: true, city: true, state: true, coverImage: true } },
-  lot: { select: { id: true, number: true, block: { select: { name: true } } } },
+  lot: {
+    select: {
+      id: true,
+      number: true,
+      price: true,
+      block: { select: { name: true, id: true, developmentId: true } },
+    },
+  },
+  block: { select: { id: true, name: true, developmentId: true } },
 } as const;
 
 @Injectable()
@@ -58,9 +76,11 @@ export class CampaignStudioService {
     private readonly exportService: CampaignExportService,
     private readonly geminiText: GeminiCampaignTextService,
     private readonly metaOAuth: MetaOAuthService,
+    private readonly socialConnections: SocialConnectionService,
     private readonly instagramPublisher: InstagramPublisherService,
     private readonly facebookPublisher: FacebookPublisherService,
     private readonly whatsappDistribution: WhatsAppDistributionService,
+    private readonly publicationOpLog: CampaignPublicationOpLogService,
     @Inject(CAMPAIGN_IMAGE_PROVIDER)
     private readonly imageProvider: ICampaignImageGenerationProvider,
   ) {}
@@ -127,23 +147,59 @@ export class CampaignStudioService {
     if (role !== UserRole.ADMIN && c.userId !== userId) {
       throw new ForbiddenException('Esta campanha pertence a outro usuário.');
     }
-    await this.assertDevelopmentAccess(userId, role, c.developmentId);
+    if (c.developmentId) {
+      await this.assertDevelopmentAccess(userId, role, c.developmentId);
+    }
     return c;
   }
 
   async create(userId: string, role: UserRole, dto: CreateCampaignDto) {
-    await this.assertDevelopmentAccess(userId, role, dto.developmentId);
+    const kind = dto.campaignKind ?? MarketingCampaignKind.LOTEMENTO;
+    const developmentId = dto.developmentId?.trim() || null;
+
+    if (kind !== MarketingCampaignKind.INSTITUCIONAL && !developmentId) {
+      throw new BadRequestException('Informe o loteamento ou selecione o tipo campanha institucional.');
+    }
+    if (developmentId) {
+      await this.assertDevelopmentAccess(userId, role, developmentId);
+    }
+
+    let blockId: string | null = dto.blockId?.trim() || null;
+    if (blockId) {
+      const block = await this.prisma.block.findUnique({
+        where: { id: blockId },
+        select: { id: true, developmentId: true },
+      });
+      if (!block) throw new NotFoundException('Quadra não encontrada');
+      if (developmentId && block.developmentId !== developmentId) {
+        throw new BadRequestException('A quadra não pertence ao loteamento selecionado.');
+      }
+      if (!developmentId) {
+        throw new BadRequestException('Campanha por quadra exige loteamento associado.');
+      }
+    }
 
     const lotId = dto.lotId?.trim() || undefined;
     if (lotId) {
+      if (!developmentId) throw new BadRequestException('Lote exige loteamento.');
       const lot = await this.prisma.lot.findUnique({
         where: { id: lotId },
-        select: { id: true, block: { select: { developmentId: true } } },
+        select: { id: true, block: { select: { developmentId: true, id: true } } },
       });
       if (!lot) throw new NotFoundException('Lote não encontrado');
-      if (lot.block.developmentId !== dto.developmentId) {
+      if (lot.block.developmentId !== developmentId) {
         throw new ForbiddenException('Lote não pertence a este loteamento.');
       }
+      if (blockId && lot.block.id !== blockId) {
+        throw new BadRequestException('O lote não pertence à quadra informada.');
+      }
+    }
+
+    const scheduled = dto.scheduledPublishAt?.trim()
+      ? new Date(dto.scheduledPublishAt)
+      : null;
+    if (scheduled && Number.isNaN(scheduled.getTime())) {
+      throw new BadRequestException('Data de agendamento inválida.');
     }
 
     const status = this.publisher.defaultTargetStatus();
@@ -152,10 +208,17 @@ export class CampaignStudioService {
       const campaign = await tx.marketingCampaign.create({
         data: {
           userId,
-          developmentId: dto.developmentId,
+          developmentId,
           lotId: lotId ?? null,
+          blockId,
           title: dto.title.trim(),
           objective: dto.objective ?? undefined,
+          campaignKind: kind,
+          commercialObjective: dto.commercialObjective ?? undefined,
+          internalDescription: dto.internalDescription?.trim() ?? null,
+          audienceNotes: dto.audienceNotes?.trim() ?? null,
+          primaryCaption: dto.primaryCaption?.trim() ?? null,
+          scheduledPublishAt: scheduled,
           targets: {
             create: dto.platforms.map((platform) => ({
               platform,
@@ -192,7 +255,29 @@ export class CampaignStudioService {
   }
 
   async publish(userId: string, role: UserRole, campaignId: string, dto: PublishCampaignDto) {
-    await this.assertCampaignOwner(userId, role, campaignId);
+    const campaign = await this.assertCampaignOwner(userId, role, campaignId);
+
+    if (campaign.status === MarketingCampaignStatus.PROCESSING) {
+      throw new BadRequestException(
+        'Campanha em processamento automático. Aguarde o término ou cancele o agendamento.',
+      );
+    }
+    if (
+      campaign.status === MarketingCampaignStatus.SCHEDULED ||
+      campaign.status === MarketingCampaignStatus.QUEUED ||
+      campaign.status === MarketingCampaignStatus.RETRYING
+    ) {
+      await this.prisma.marketingCampaign.update({
+        where: { id: campaignId },
+        data: {
+          status: MarketingCampaignStatus.READY,
+          scheduledPublishAt: null,
+          nextRetryAt: null,
+          publicationLockUntil: null,
+          publishFailureReason: null,
+        },
+      });
+    }
 
     if (dto.platform === 'WHATSAPP') {
       throw new BadRequestException(
@@ -211,10 +296,11 @@ export class CampaignStudioService {
       };
     }
 
-    const connectionId = dto.socialConnectionId?.trim();
-    if (!connectionId) {
-      throw new BadRequestException('Informe a conexão Meta (socialConnectionId) da página a publicar.');
-    }
+    const connectionId = await this.socialConnections.resolveConnectionIdForPublishing(
+      userId,
+      role,
+      dto.socialConnectionId?.trim(),
+    );
 
     if (dto.platform === 'INSTAGRAM_FEED') {
       return this.instagramPublisher.publishFeed({
@@ -243,20 +329,133 @@ export class CampaignStudioService {
     return payload;
   }
 
-  async list(userId: string, role: UserRole, developmentId?: string) {
+  async list(
+    userId: string,
+    role: UserRole,
+    filters: {
+      developmentId?: string;
+      lotId?: string;
+      status?: string;
+      campaignKind?: string;
+      userIdFilter?: string;
+      from?: string;
+      to?: string;
+    } = {},
+  ) {
+    const statuses: MarketingCampaignStatus[] = [
+      'DRAFT',
+      'READY',
+      'SCHEDULED',
+      'QUEUED',
+      'PROCESSING',
+      'PUBLISHED',
+      'FAILED',
+      'RETRYING',
+      'CANCELED',
+      'ARCHIVED',
+    ];
+    const kinds: MarketingCampaignKind[] = [
+      'LOTEMENTO',
+      'LOTE',
+      'INSTITUCIONAL',
+      'PROMOCAO',
+      'REENGAJAMENTO',
+    ];
+
     const where: Prisma.MarketingCampaignWhereInput = {
-      ...(developmentId ? { developmentId } : {}),
-      ...(role === UserRole.ADMIN ? {} : { userId }),
+      ...(filters.developmentId ? { developmentId: filters.developmentId } : {}),
+      ...(filters.lotId ? { lotId: filters.lotId } : {}),
+      ...(filters.status && statuses.includes(filters.status as MarketingCampaignStatus)
+        ? { status: filters.status as MarketingCampaignStatus }
+        : {}),
+      ...(filters.campaignKind && kinds.includes(filters.campaignKind as MarketingCampaignKind)
+        ? { campaignKind: filters.campaignKind as MarketingCampaignKind }
+        : {}),
+      ...(role === UserRole.ADMIN
+        ? filters.userIdFilter
+          ? { userId: filters.userIdFilter }
+          : {}
+        : { userId }),
+      ...(() => {
+        if (!filters.from && !filters.to) return {};
+        const range: Prisma.DateTimeFilter = {};
+        if (filters.from) {
+          const d = new Date(filters.from);
+          if (!Number.isNaN(d.getTime())) range.gte = d;
+        }
+        if (filters.to) {
+          const d = new Date(filters.to);
+          if (!Number.isNaN(d.getTime())) range.lte = d;
+        }
+        return Object.keys(range).length ? { createdAt: range } : {};
+      })(),
     };
+
     return this.prisma.marketingCampaign.findMany({
       where,
       orderBy: { updatedAt: 'desc' },
-      take: 50,
+      take: 120,
       include: {
         development: { select: { name: true, city: true } },
         lot: { select: { number: true } },
+        user: { select: { id: true, name: true, email: true } },
         _count: { select: { assets: true, copies: true } },
+        targets: { select: { platform: true, status: true } },
       },
+    });
+  }
+
+  captionTemplates() {
+    return listCaptionTemplateMeta();
+  }
+
+  async applyCaptionTemplate(userId: string, role: UserRole, campaignId: string, templateId: string) {
+    if (!isValidTemplateId(templateId)) {
+      throw new BadRequestException('Template de legenda inválido.');
+    }
+    const campaign = await this.assertCampaignOwner(userId, role, campaignId);
+
+    const dev = campaign.development;
+    const lot = campaign.lot;
+    const priceLabel =
+      lot?.price != null
+        ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(lot.price))
+        : undefined;
+
+    const plain = buildPlainCaption(templateId, {
+      campaignTitle: campaign.title,
+      developmentName: dev?.name,
+      city: dev?.city,
+      lotNumber: lot?.number,
+      blockName: lot?.block?.name,
+      priceLabel,
+      audienceNotes: campaign.audienceNotes,
+      internalDescription: campaign.internalDescription,
+    });
+
+    const platforms = campaign.targets.map((t) => t.platform);
+    const upserts = buildPlainCopyUpserts(campaignId, platforms, plain);
+
+    await this.prisma.$transaction([
+      this.prisma.marketingCampaign.update({
+        where: { id: campaignId },
+        data: {
+          primaryCaption: plain.feedCaption,
+          lastGeneratedAt: new Date(),
+        },
+      }),
+      ...upserts.map((u) => this.prisma.campaignCopy.upsert(u)),
+      ...campaign.targets.map((t) =>
+        this.prisma.campaignPublicationTarget.update({
+          where: { id: t.id },
+          data: { status: PublicationTargetStatus.PREPARED },
+        }),
+      ),
+    ]);
+
+    return this.prisma.marketingCampaign.findUniqueOrThrow({
+      where: { id: campaignId },
+      include: campaignDetailInclude,
     });
   }
 
@@ -265,13 +464,96 @@ export class CampaignStudioService {
   }
 
   async update(userId: string, role: UserRole, id: string, dto: UpdateCampaignDto) {
-    await this.assertCampaignOwner(userId, role, id);
+    const current = await this.assertCampaignOwner(userId, role, id);
+
+    let nextDevelopmentId = current.developmentId;
+    if (dto.developmentId !== undefined) {
+      nextDevelopmentId = dto.developmentId?.trim() || null;
+      if (nextDevelopmentId) {
+        await this.assertDevelopmentAccess(userId, role, nextDevelopmentId);
+      }
+    }
+
+    const kind = dto.campaignKind ?? current.campaignKind;
+    if (kind !== MarketingCampaignKind.INSTITUCIONAL && !nextDevelopmentId) {
+      throw new BadRequestException('Campanha sem loteamento exige tipo institucional.');
+    }
+
+    let scheduled: Date | null | undefined;
+    if (dto.scheduledPublishAt !== undefined) {
+      scheduled = dto.scheduledPublishAt?.trim() ? new Date(dto.scheduledPublishAt) : null;
+      if (scheduled && Number.isNaN(scheduled.getTime())) {
+        throw new BadRequestException('Data de agendamento inválida.');
+      }
+    }
+
+    const nextStatus = dto.status ?? current.status;
+    if (nextStatus === MarketingCampaignStatus.SCHEDULED) {
+      const effective =
+        scheduled !== undefined
+          ? scheduled
+          : dto.scheduledPublishAt === undefined
+            ? current.scheduledPublishAt
+            : null;
+      if (!effective || Number.isNaN(effective.getTime())) {
+        throw new BadRequestException(
+          'Para agendar, informe data e hora válidas (scheduledPublishAt).',
+        );
+      }
+    }
+
+    let scheduledChannelsPayload: Prisma.InputJsonValue | typeof Prisma.JsonNull | undefined;
+    if (dto.scheduledChannels !== undefined) {
+      const allowed = dto.scheduledChannels.filter(
+        (p) =>
+          p === PublicationPlatform.INSTAGRAM_FEED || p === PublicationPlatform.FACEBOOK_POST,
+      );
+      scheduledChannelsPayload =
+        allowed.length > 0 ? (allowed as unknown as Prisma.InputJsonValue) : Prisma.JsonNull;
+    }
+
     return this.prisma.marketingCampaign.update({
       where: { id },
       data: {
         ...(dto.title != null ? { title: dto.title.trim() } : {}),
         ...(dto.status != null ? { status: dto.status } : {}),
         ...(dto.objective != null ? { objective: dto.objective } : {}),
+        ...(dto.campaignKind != null ? { campaignKind: dto.campaignKind } : {}),
+        ...(dto.commercialObjective !== undefined ? { commercialObjective: dto.commercialObjective } : {}),
+        ...(dto.internalDescription !== undefined
+          ? { internalDescription: dto.internalDescription?.trim() ?? null }
+          : {}),
+        ...(dto.audienceNotes !== undefined ? { audienceNotes: dto.audienceNotes?.trim() ?? null } : {}),
+        ...(dto.primaryCaption !== undefined ? { primaryCaption: dto.primaryCaption?.trim() ?? null } : {}),
+        ...(dto.scheduledPublishAt !== undefined ? { scheduledPublishAt: scheduled } : {}),
+        ...(dto.scheduleTimezone !== undefined
+          ? { scheduleTimezone: dto.scheduleTimezone?.trim() || 'America/Sao_Paulo' }
+          : {}),
+        ...(scheduledChannelsPayload !== undefined
+          ? { scheduledChannelsJson: scheduledChannelsPayload }
+          : {}),
+        ...(dto.scheduledSocialConnectionId !== undefined
+          ? {
+              scheduledSocialConnectionId: dto.scheduledSocialConnectionId?.trim() || null,
+            }
+          : {}),
+        ...(dto.autoRetryEnabled !== undefined ? { autoRetryEnabled: dto.autoRetryEnabled } : {}),
+        ...(dto.maxRetries !== undefined ? { maxRetries: dto.maxRetries } : {}),
+        ...(dto.developmentId !== undefined
+          ? dto.developmentId?.trim()
+            ? { development: { connect: { id: dto.developmentId.trim() } } }
+            : { development: { disconnect: true } }
+          : {}),
+        ...(dto.lotId !== undefined
+          ? dto.lotId?.trim()
+            ? { lot: { connect: { id: dto.lotId.trim() } } }
+            : { lot: { disconnect: true } }
+          : {}),
+        ...(dto.blockId !== undefined
+          ? dto.blockId?.trim()
+            ? { block: { connect: { id: dto.blockId.trim() } } }
+            : { block: { disconnect: true } }
+          : {}),
       },
       include: campaignDetailInclude,
     });
@@ -286,6 +568,135 @@ export class CampaignStudioService {
     });
   }
 
+  async cancelSchedule(userId: string, role: UserRole, id: string) {
+    const c = await this.assertCampaignOwner(userId, role, id);
+    if (
+      c.status !== MarketingCampaignStatus.SCHEDULED &&
+      c.status !== MarketingCampaignStatus.QUEUED &&
+      c.status !== MarketingCampaignStatus.RETRYING
+    ) {
+      throw new BadRequestException(
+        'Só é possível cancelar campanhas agendadas, na fila ou aguardando nova tentativa.',
+      );
+    }
+    const updated = await this.prisma.marketingCampaign.update({
+      where: { id },
+      data: {
+        status: MarketingCampaignStatus.CANCELED,
+        scheduledPublishAt: null,
+        nextRetryAt: null,
+        publicationLockUntil: null,
+        publishFailureReason: null,
+      },
+      include: campaignDetailInclude,
+    });
+    await this.publicationOpLog.log({
+      campaignId: id,
+      userId,
+      action: 'SCHEDULE_CANCELED',
+      status: 'OK',
+      message: 'Agendamento cancelado pelo usuário.',
+      executedByUserId: userId,
+    });
+    return updated;
+  }
+
+  async retryPublishManual(userId: string, role: UserRole, id: string) {
+    const c = await this.assertCampaignOwner(userId, role, id);
+    if (
+      c.status !== MarketingCampaignStatus.FAILED &&
+      c.status !== MarketingCampaignStatus.RETRYING
+    ) {
+      throw new BadRequestException(
+        'Reprocessamento manual só está disponível para campanhas com falha ou em retry.',
+      );
+    }
+    const updated = await this.prisma.marketingCampaign.update({
+      where: { id },
+      data: {
+        status: MarketingCampaignStatus.QUEUED,
+        nextRetryAt: null,
+        publicationLockUntil: null,
+        publishFailureReason: null,
+      },
+      include: campaignDetailInclude,
+    });
+    await this.publicationOpLog.log({
+      campaignId: id,
+      userId,
+      action: 'MANUAL_RETRY_QUEUED',
+      status: 'OK',
+      message: 'Campanha recolocada na fila para nova tentativa.',
+      executedByUserId: userId,
+    });
+    return updated;
+  }
+
+  async listPublicationOpLogs(userId: string, role: UserRole, campaignId: string) {
+    await this.assertCampaignOwner(userId, role, campaignId);
+    return this.prisma.campaignPublicationOpLog.findMany({
+      where: { campaignId },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+      select: {
+        id: true,
+        action: true,
+        channel: true,
+        status: true,
+        message: true,
+        externalPostId: true,
+        attemptNumber: true,
+        createdAt: true,
+        executedByUserId: true,
+      },
+    });
+  }
+
+  async publicationOpsSummary(_userId: string, role: UserRole) {
+    if (role !== UserRole.ADMIN) {
+      throw new ForbiddenException('Apenas administradores podem ver o painel operacional.');
+    }
+    const [
+      scheduled,
+      queued,
+      processing,
+      published,
+      failed,
+      retrying,
+      canceled,
+    ] = await Promise.all([
+      this.prisma.marketingCampaign.count({ where: { status: MarketingCampaignStatus.SCHEDULED } }),
+      this.prisma.marketingCampaign.count({ where: { status: MarketingCampaignStatus.QUEUED } }),
+      this.prisma.marketingCampaign.count({ where: { status: MarketingCampaignStatus.PROCESSING } }),
+      this.prisma.marketingCampaign.count({ where: { status: MarketingCampaignStatus.PUBLISHED } }),
+      this.prisma.marketingCampaign.count({ where: { status: MarketingCampaignStatus.FAILED } }),
+      this.prisma.marketingCampaign.count({ where: { status: MarketingCampaignStatus.RETRYING } }),
+      this.prisma.marketingCampaign.count({ where: { status: MarketingCampaignStatus.CANCELED } }),
+    ]);
+
+    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const publishedLast7d = await this.prisma.marketingCampaign.count({
+      where: {
+        status: MarketingCampaignStatus.PUBLISHED,
+        campaignPublishedAt: { gte: since },
+      },
+    });
+
+    return {
+      generatedAt: new Date().toISOString(),
+      counts: {
+        scheduled,
+        queued,
+        processing,
+        published,
+        failed,
+        retrying,
+        canceled,
+        publishedLast7d,
+      },
+    };
+  }
+
   /** Duplica rascunho, alvos, cópias e referências de imagem (mesmas URLs). */
   async duplicate(userId: string, role: UserRole, id: string, title?: string) {
     const src = await this.assertCampaignOwner(userId, role, id);
@@ -297,13 +708,30 @@ export class CampaignStudioService {
         data: {
           userId,
           developmentId: src.developmentId,
+          blockId: src.blockId,
           lotId: src.lotId,
           title: newTitle,
           objective: src.objective,
+          campaignKind: src.campaignKind,
+          commercialObjective: src.commercialObjective ?? undefined,
+          internalDescription: src.internalDescription,
+          audienceNotes: src.audienceNotes,
+          primaryCaption: src.primaryCaption,
           status: 'DRAFT',
           primaryContentType: src.primaryContentType,
           packJson: src.packJson ?? undefined,
           lastGeneratedAt: src.lastGeneratedAt ?? undefined,
+          scheduledPublishAt: null,
+          scheduleTimezone: 'America/Sao_Paulo',
+          scheduledSocialConnectionId: null,
+          autoRetryEnabled: true,
+          retryCount: 0,
+          maxRetries: 3,
+          lastPublishAttemptAt: null,
+          nextRetryAt: null,
+          campaignPublishedAt: null,
+          publishFailureReason: null,
+          publicationLockUntil: null,
           targets: {
             create: src.targets.map((t) => ({
               platform: t.platform,
@@ -326,6 +754,7 @@ export class CampaignStudioService {
             mimeType: a.mimeType,
             isPrimary: a.isPrimary,
             sortOrder: a.sortOrder,
+            sourcePropertyImageId: a.sourcePropertyImageId,
           },
         });
       }
@@ -425,6 +854,7 @@ export class CampaignStudioService {
             mimeType: 'image/*',
             sortOrder: start + i,
             isPrimary: start === 0 && i === 0 && c.assets.length === 0,
+            sourcePropertyImageId: item.sourcePropertyImageId?.trim() || null,
           },
         }),
       ),
@@ -519,6 +949,12 @@ export class CampaignStudioService {
     try {
       const campaign = await this.assertCampaignOwner(userId, role, campaignId);
 
+      if (!campaign.developmentId) {
+        throw new BadRequestException(
+          'Associe um loteamento à campanha para usar o gerador de anúncios com IA. Para campanhas institucionais, use Templates de legenda (sem motor de anúncios).',
+        );
+      }
+
       const genDto = {
         contentType: dto.contentType,
         objective: dto.objective,
@@ -605,13 +1041,16 @@ export class CampaignStudioService {
     const lotLine = c.lot
       ? `lote ${c.lot.number} (quadra ${c.lot.block.name})`
       : 'loteamento em destaque';
+    const devLine = c.development
+      ? `no empreendimento "${c.development.name}", ${c.development.city}.`
+      : 'para campanha institucional / marca (use o título da campanha como referência).';
     let refNote = '';
     if (dto.referenceAssetId) {
       const ref = c.assets.find((a) => a.id === dto.referenceAssetId);
       if (ref) refNote = ' Use como referência visual a composição/cores da imagem já selecionada na campanha.';
     }
     const prompt = [
-      `Criar imagem promocional em português (Brasil) para ${lotLine} no empreendimento "${c.development.name}", ${c.development.city}.`,
+      `Criar imagem promocional em português (Brasil) para ${lotLine} ${devLine}`,
       `Estilo: ${style}. Objetivo: divulgação imobiliária de alta conversão.`,
       `Formato mental: ${platform} (${this.aspectHintForPlatform(platform)}).`,
       'Qualidade profissional, tipografia legível, sensação de oportunidade e confiança.',

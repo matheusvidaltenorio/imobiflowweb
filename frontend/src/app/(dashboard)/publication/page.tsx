@@ -1,7 +1,8 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Building2, Megaphone } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -24,8 +25,18 @@ type MapLot = {
   blockId: string;
 };
 
+type ResumeCampaign = {
+  id: string;
+  developmentId: string | null;
+  lotId: string | null;
+  title?: string;
+};
+
 export default function PublicationCenterPage() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const resumeId = searchParams.get('resume');
+  const institutionalNew = searchParams.get('institutional') === '1';
   const { toast } = useToast();
   const [developmentId, setDevelopmentId] = useState<string>('');
   const [lotId, setLotId] = useState<string>('');
@@ -60,6 +71,28 @@ export default function PublicationCenterPage() {
     return [...list].sort((a, b) => a.number.localeCompare(b.number, undefined, { numeric: true }));
   }, [mapData?.lots]);
 
+  const { data: resumeCampaign, isLoading: resumeLoading } = useQuery({
+    queryKey: ['campaign-studio', 'campaign', resumeId],
+    queryFn: async () => {
+      const { data } = await api.get<ResumeCampaign>(`/campaign-studio/campaigns/${resumeId}`);
+      return data;
+    },
+    enabled: !!resumeId,
+  });
+
+  useEffect(() => {
+    if (!resumeCampaign || !resumeId) return;
+    if (resumeCampaign.developmentId) {
+      setDevelopmentId(resumeCampaign.developmentId);
+      setScope(resumeCampaign.lotId ? 'lot' : 'development');
+      setLotId(resumeCampaign.lotId ?? '');
+    } else {
+      setDevelopmentId('');
+      setScope('development');
+      setLotId('');
+    }
+  }, [resumeCampaign, resumeId]);
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const sp = new URLSearchParams(window.location.search);
@@ -91,15 +124,7 @@ export default function PublicationCenterPage() {
     window.history.replaceState({}, '', pathname || '/publication');
   }, [pathname, toast]);
 
-  return (
-    <main className="min-h-0 bg-slate-50/30 p-4 sm:p-6 md:p-8 lg:p-10">
-      <div className="mx-auto max-w-7xl">
-        <PageHeader
-          title="Centro de publicação"
-          description="Monte campanhas para Instagram, Facebook e WhatsApp: texto com IA, imagens do banco, upload ou geração por IA, pré-visualização e publicação direta quando a Meta estiver conectada — ou fluxo assistido (copiar, baixar, WhatsApp)."
-          breadcrumbs={[{ label: 'Centro de publicação' }]}
-        />
-
+  const pickerCard: ReactNode = !institutionalNew ? (
         <Card className="mb-8 border-primary-100 bg-white p-5 shadow-sm sm:p-6">
           <div className="mb-4 flex items-start gap-3">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary-100 text-primary-800">
@@ -204,24 +229,71 @@ export default function PublicationCenterPage() {
             </div>
           ) : null}
         </Card>
+  ) : null;
 
-        {developmentId && (scope === 'development' || (scope === 'lot' && lotId)) ? (
-          <CampaignStudioWizard
-            mode={scope === 'lot' ? 'lot' : 'development'}
-            developmentId={developmentId}
-            lotId={scope === 'lot' ? lotId : undefined}
-            developmentName={selectedDev?.name}
-            title="2. Construtor de campanha"
-          />
-        ) : developmentId && scope === 'lot' && !lotId ? (
-          <Card className="border-dashed border-amber-200 bg-amber-50/50 p-6 text-sm text-amber-950">
-            Selecione um lote acima para abrir o construtor de campanha.
-          </Card>
-        ) : (
-          <Card className="border-dashed border-slate-200 bg-slate-50/80 p-8 text-center text-sm text-slate-600">
-            Escolha um loteamento para habilitar o construtor de campanha e o histórico de rascunhos.
-          </Card>
-        )}
+  let wizardSection: ReactNode;
+  if (institutionalNew) {
+    wizardSection = (
+      <CampaignStudioWizard
+        mode="development"
+        developmentId=""
+        title="2. Construtor de campanha (institucional)"
+      />
+    );
+  } else if (resumeId && resumeLoading) {
+    wizardSection = (
+      <Card className="border-slate-200 p-8 text-center text-sm text-slate-600">
+        Carregando campanha para edição…
+      </Card>
+    );
+  } else if (resumeId && resumeCampaign && !resumeCampaign.developmentId) {
+    wizardSection = (
+      <CampaignStudioWizard
+        mode="development"
+        developmentId=""
+        initialCampaignId={resumeCampaign.id}
+        defaultTitle={resumeCampaign.title}
+        title="2. Construtor de campanha"
+      />
+    );
+  } else if (developmentId && (scope === 'development' || (scope === 'lot' && lotId))) {
+    wizardSection = (
+      <CampaignStudioWizard
+        mode={scope === 'lot' ? 'lot' : 'development'}
+        developmentId={developmentId}
+        lotId={scope === 'lot' ? lotId : undefined}
+        developmentName={selectedDev?.name}
+        initialCampaignId={resumeId ?? undefined}
+        defaultTitle={resumeCampaign?.title}
+        title="2. Construtor de campanha"
+      />
+    );
+  } else if (developmentId && scope === 'lot' && !lotId) {
+    wizardSection = (
+      <Card className="border-dashed border-amber-200 bg-amber-50/50 p-6 text-sm text-amber-950">
+        Selecione um lote acima para abrir o construtor de campanha.
+      </Card>
+    );
+  } else {
+    wizardSection = (
+      <Card className="border-dashed border-slate-200 bg-slate-50/80 p-8 text-center text-sm text-slate-600">
+        Escolha um loteamento para habilitar o construtor de campanha e o histórico de rascunhos — ou abra uma campanha
+        salva pela lista em Campanhas.
+      </Card>
+    );
+  }
+
+  return (
+    <main className="min-h-0 bg-slate-50/30 p-4 sm:p-6 md:p-8 lg:p-10">
+      <div className="mx-auto max-w-7xl">
+        <PageHeader
+          title="Centro de publicação"
+          description="Monte campanhas para Instagram, Facebook e WhatsApp: texto com IA, imagens do banco, upload ou geração por IA, pré-visualização e publicação direta quando a Meta estiver conectada — ou fluxo assistido (copiar, baixar, WhatsApp)."
+          breadcrumbs={[{ label: 'Centro de publicação' }]}
+        />
+
+        {pickerCard}
+        {wizardSection}
       </div>
     </main>
   );

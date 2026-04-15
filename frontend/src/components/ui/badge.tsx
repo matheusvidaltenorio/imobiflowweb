@@ -11,6 +11,7 @@ const badgeVariants = cva(
         success: 'border-transparent bg-success-100 text-success-700',
         warning: 'border-transparent bg-warning-100 text-warning-900',
         danger: 'border-transparent bg-danger-100 text-danger-800',
+        info: 'border-transparent bg-sky-100 text-sky-900',
         muted: 'border-surface-muted bg-surface text-gray-700',
         outline: 'border-surface-muted bg-white text-gray-800',
       },

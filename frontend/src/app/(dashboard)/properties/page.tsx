@@ -13,6 +13,7 @@ const statusStyles: Record<string, string> = {
   DISPONIVEL: 'bg-success-50 text-success-700 ring-success-500/20',
   VENDIDO: 'bg-primary-100 text-primary-800 ring-primary-500/15',
   RESERVADO: 'bg-amber-50 text-amber-800 ring-amber-500/20',
+  EM_NEGOCIACAO: 'bg-sky-50 text-sky-900 ring-sky-500/20',
   INDISPONIVEL: 'bg-gray-100 text-gray-600 ring-gray-200',
 };
 

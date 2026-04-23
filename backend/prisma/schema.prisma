@@ -11,6 +11,20 @@ enum UserRole {
   CLIENTE
   CORRETOR
   ADMIN
+  /// Conta B2B da incorporadora/gestora do loteamento (escopo restrito).
+  GESTORA
+}
+
+/// Submissão da gestora aguardando revisão administrativa (não entra em “Disponíveis hoje” até aprovação).
+enum GestoraSubmissionStatus {
+  PENDING_APPROVAL
+  REJECTED
+}
+
+/// Como publicar atualizações feitas pela gestora (por vínculo usuário ↔ loteamento).
+enum GestoraPublishMode {
+  IMMEDIATE
+  PENDING_REVIEW
 }
 
 enum PropertyType {
@@ -220,6 +234,86 @@ enum SocialConnectionStatus {
   ERROR
 }
 
+/// Origem do registro da central de disponibilidade diária (não altera o status cadastral do lote).
+enum DailyAvailabilitySourceType {
+  IMAGE
+  CSV
+  /// Planilha estruturada (xlsx/csv) importada pela gestora.
+  SPREADSHEET
+  TEXT
+  MANUAL
+}
+
+/// Estado comercial do dia (snapshot operacional; independente de PropertyStatus no cadastro).
+enum LotDailySnapshotStatus {
+  DISPONIVEL
+  RESERVADO
+  VENDIDO
+  NEGOCIACAO
+}
+
+// --- CRM inteligente: áudio, match, portais ---
+
+enum AudioIngestionStatus {
+  UPLOADED
+  TRANSCRIBING
+  TRANSCRIBED
+  EXTRACTED
+  FAILED
+  APPLIED
+}
+
+enum PropertyIntent {
+  MORAR
+  INVESTIR
+  OUTRO
+}
+
+enum MatchTargetKind {
+  LOT
+  PROPERTY
+}
+
+enum MatchSuggestionStatus {
+  SUGGESTED
+  DISMISSED
+  SENT_TO_CLIENT
+  VISIT_SCHEDULED
+  CONVERTED
+}
+
+enum CatalogShareStatus {
+  DRAFT
+  SENT
+  ARCHIVED
+}
+
+enum PortalCode {
+  OLX
+  GRUPO_OLX_XML
+  ORULO
+  HOMER
+  DWV
+  CUSTOM
+}
+
+enum PortalListingLifecycleStatus {
+  DRAFT
+  READY
+  PENDING_SYNC
+  PUBLISHED
+  FAILED
+  REMOVED
+  OUT_OF_SYNC
+}
+
+enum ExternalLeadIngestStatus {
+  RECEIVED
+  DEDUPLICATED
+  CRM_LEAD_CREATED
+  FAILED
+}
+
 model User {
   id            String    @id @default(cuid())
   email         String    @unique
@@ -251,6 +345,15 @@ model User {
   socialConnections      SocialConnection[]
   socialIntegrationLogs  SocialIntegrationLog[]
   campaignPublicationOpLogs CampaignPublicationOpLog[]
+  dailyAvailabilitiesCreated DailyAvailability[] @relation("DailyAvailabilityCreatedBy")
+  lotImageMapsCreated        LotImageMap[]       @relation("LotImageMapCreatedBy")
+  spreadsheetImportTemplatesCreated SpreadsheetImportTemplate[] @relation("SpreadsheetImportTemplateCreatedBy")
+  audioIngestions              AudioIngestion[]
+  portalListingsCreated        PortalListing[] @relation("PortalListingCreatedBy")
+  catalogShares                CatalogShare[]
+  inAppNotifications           InAppNotification[]
+  portalConnectorConfigs       PortalConnectorConfig[]
+  managerDevelopmentAccess     ManagerDevelopmentAccess[]
 }
 
 model Property {
@@ -287,6 +390,8 @@ model Property {
   proposals       Proposal[]
   contracts       Contract[]
   sales           Sale[]
+  portalListings  PortalListing[]
+  matchSuggestions MatchSuggestion[]
 
   @@index([userId])
   @@index([developmentId])
@@ -350,10 +455,35 @@ model Development {
   instagramAdSuggestions InstagramAdSuggestion[]
   marketingCampaigns     MarketingCampaign[]
   nearbyPlaces DevelopmentNearbyPlace[]
+  dailyAvailabilities DailyAvailability[]
+  lotImageMaps      LotImageMap[]
+  spreadsheetImportTemplates SpreadsheetImportTemplate[]
+  managerDevelopmentAccess   ManagerDevelopmentAccess[]
 
   @@index([city])
   @@index([name])
   @@index([geocodingStatus])
+}
+
+/// Vínculo gestora ↔ loteamentos autorizados (escopo B2B).
+model ManagerDevelopmentAccess {
+  id                         String             @id @default(cuid())
+  userId                     String             @map("user_id")
+  developmentId              String             @map("development_id")
+  /// JSON livre para evolução (flags adicionais).
+  permissions                Json?              @map("permissions")
+  spreadsheetImportEnabled   Boolean            @default(true) @map("spreadsheet_import_enabled")
+  assistedImageEnabled       Boolean            @default(true) @map("assisted_image_enabled")
+  publishMode                GestoraPublishMode @default(IMMEDIATE) @map("publish_mode")
+  createdAt                  DateTime           @default(now()) @map("created_at")
+  updatedAt                  DateTime           @updatedAt @map("updated_at")
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  development Development @relation(fields: [developmentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, developmentId])
+  @@index([userId])
+  @@index([developmentId])
 }
 
 /// POIs próximos ao loteamento (cache; fonte típica Overpass/OSM).
@@ -431,11 +561,100 @@ model Lot {
   instagramAdSuggestions InstagramAdSuggestion[]
   marketingCampaigns     MarketingCampaign[]
   simulations            Simulation[]
+  dailySnapshots         LotDailyStatus[]
+  portalListings         PortalListing[]
+  matchSuggestions       MatchSuggestion[]
+  lotImageMap            LotImageMap?
 
   @@index([blockId])
   @@index([status])
   @@index([saleScore])
   @@index([geoStatus])
+}
+
+/// Atualização diária de disponibilidade por loteamento (histórico: vários registros por dia permitidos).
+model DailyAvailability {
+  id                String   @id @default(cuid())
+  developmentId     String
+  date              DateTime @db.Date
+  sourceType        DailyAvailabilitySourceType
+  sourceFileUrl     String?
+  notes             String?  @db.Text
+  rawText           String?  @db.Text
+  /// Metadados do fluxo assistido (imagem, confirmação, resumo) — opcional.
+  assistedMetadata  Json?    @map("assisted_metadata")
+  /// Metadados de importação por planilha (arquivo, linhas, template, erros) — opcional.
+  importMetadata    Json?    @map("import_metadata")
+  /// Null = publicado / fluxo admin; PENDING = aguardando aprovação; REJECTED = recusado pelo admin.
+  gestoraSubmissionStatus GestoraSubmissionStatus? @map("gestora_submission_status")
+  createdById       String
+  createdAt         DateTime @default(now())
+
+  development       Development @relation(fields: [developmentId], references: [id], onDelete: Cascade)
+  createdBy         User        @relation("DailyAvailabilityCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  lotSnapshots      LotDailyStatus[]
+
+  @@index([developmentId, date])
+  @@index([developmentId, date, createdAt])
+  @@index([developmentId, date, gestoraSubmissionStatus])
+  @@index([createdById])
+}
+
+/// Template visual: posição do lote na planta/imagem (coordenadas normalizadas 0–1 para reutilizar entre fotos).
+model LotImageMap {
+  id              String   @id @default(cuid())
+  developmentId   String
+  lotId           String   @unique
+  xNorm           Decimal  @db.Decimal(8, 7)
+  yNorm           Decimal  @db.Decimal(8, 7)
+  wNorm           Decimal? @db.Decimal(8, 7)
+  hNorm           Decimal? @db.Decimal(8, 7)
+  refImageWidth   Int?
+  refImageHeight  Int?
+  createdById     String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  development Development @relation(fields: [developmentId], references: [id], onDelete: Cascade)
+  lot         Lot         @relation(fields: [lotId], references: [id], onDelete: Cascade)
+  createdBy   User        @relation("LotImageMapCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([developmentId])
+}
+
+/// Template de colunas da planilha da gestora (reutilização por loteamento).
+model SpreadsheetImportTemplate {
+  id               String   @id @default(cuid())
+  name             String
+  /// Rótulo da gestora (ex.: nome da incorporadora).
+  gestoraLabel     String?  @map("gestora_label")
+  developmentId    String   @map("development_id")
+  /// Mapeamento: quadra, lote, status, preço, area, observacao, loteamento (opcional).
+  columnMapping    Json     @map("column_mapping")
+  createdById      String   @map("created_by_id")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  development Development @relation(fields: [developmentId], references: [id], onDelete: Cascade)
+  createdBy   User        @relation("SpreadsheetImportTemplateCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([developmentId])
+}
+
+/// Snapshot do estado comercial do lote naquela atualização diária.
+model LotDailyStatus {
+  id                  String   @id @default(cuid())
+  dailyAvailabilityId String
+  lotId               String
+  status              LotDailySnapshotStatus
+  price               Decimal? @db.Decimal(12, 2)
+  notes               String?  @db.Text
+
+  dailyAvailability   DailyAvailability @relation(fields: [dailyAvailabilityId], references: [id], onDelete: Cascade)
+  lot                 Lot               @relation(fields: [lotId], references: [id], onDelete: Cascade)
+
+  @@unique([dailyAvailabilityId, lotId])
+  @@index([lotId])
 }
 
 model AiMessageSuggestion {
@@ -757,6 +976,9 @@ model Client {
   proposals   Proposal[]
   contracts   Contract[]
   sales       Sale[]
+  interestProfile InterestProfile?
+  audioIngestions AudioIngestion[]
+  catalogShares   CatalogShare[]
 
   @@index([brokerId])
 }
@@ -823,6 +1045,11 @@ model Lead {
   interactions LeadInteraction[]
   aiMessageSuggestions AiMessageSuggestion[]
   predictionSnapshots LeadPredictionSnapshot[]
+  interestProfile      InterestProfile?
+  audioIngestions      AudioIngestion[]
+  matchSuggestions     MatchSuggestion[]
+  catalogShares        CatalogShare[]
+  externalPortalLeads  ExternalPortalLead[]
 
   @@index([propertyId])
   @@index([lotId])
@@ -1061,4 +1288,210 @@ model Proposal {
   @@index([propertyId])
   @@index([status])
   @@index([createdAt])
+}
+
+/// Perfil comercial / preferências para match (lead ou cliente).
+model InterestProfile {
+  id                      String          @id @default(cuid())
+  leadId                  String?         @unique
+  clientId                String?         @unique
+  budgetMin               Decimal?        @db.Decimal(18, 2)
+  budgetMax               Decimal?        @db.Decimal(18, 2)
+  preferredDevelopmentIds String[]        @default([])
+  preferredRegions        String[]        @default([])
+  minArea                 Decimal?        @db.Decimal(14, 2)
+  maxArea                 Decimal?        @db.Decimal(14, 2)
+  propertyIntent          PropertyIntent?
+  financingNotes          String?         @db.Text
+  mustHaveTags            String[]        @default([])
+  niceToHaveTags          String[]        @default([])
+  urgencyLevel            String?
+  extraJson               Json?
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
+
+  lead   Lead?   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  client Client? @relation(fields: [clientId], references: [id], onDelete: Cascade)
+}
+
+/// Ingestão de áudio + transcrição + extração revisável.
+model AudioIngestion {
+  id                    String               @id @default(cuid())
+  userId                String
+  leadId                String?
+  clientId              String?
+  sourceUrl             String
+  publicId              String?
+  mimeType              String
+  durationMs            Int?
+  status                AudioIngestionStatus   @default(UPLOADED)
+  transcriptRaw       String?                @db.Text
+  transcriptConfidence  Float?
+  extractionJson        Json?
+  extractionError       String?                @db.Text
+  appliedAt             DateTime?
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lead   Lead?   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  client Client? @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([leadId])
+  @@index([clientId])
+  @@index([status])
+}
+
+/// Sugestão de match lead ↔ lote/imóvel.
+model MatchSuggestion {
+  id           String                 @id @default(cuid())
+  leadId       String
+  kind         MatchTargetKind
+  lotId        String?
+  propertyId   String?
+  score        Decimal                @db.Decimal(8, 5)
+  reasonsJson  Json
+  status       MatchSuggestionStatus  @default(SUGGESTED)
+  matchRunId   String?
+  createdAt    DateTime               @default(now())
+
+  lead     Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  lot      Lot?      @relation(fields: [lotId], references: [id], onDelete: Cascade)
+  property Property? @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([leadId, createdAt])
+  @@index([lotId])
+  @@index([propertyId])
+}
+
+/// Catálogo personalizado compartilhável com o cliente.
+model CatalogShare {
+  id           String             @id @default(cuid())
+  brokerUserId String
+  leadId       String?
+  clientId     String?
+  title        String
+  message      String?            @db.Text
+  shareToken   String             @unique @default(cuid())
+  status       CatalogShareStatus @default(DRAFT)
+  sentAt       DateTime?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  broker User    @relation(fields: [brokerUserId], references: [id], onDelete: Cascade)
+  lead   Lead?   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  client Client? @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  items  CatalogShareItem[]
+
+  @@index([brokerUserId])
+  @@index([leadId])
+}
+
+model CatalogShareItem {
+  id             String   @id @default(cuid())
+  catalogShareId String
+  sortOrder      Int      @default(0)
+  lotId          String?
+  propertyId     String?
+  brokerNote     String?
+
+  catalogShare CatalogShare @relation(fields: [catalogShareId], references: [id], onDelete: Cascade)
+
+  @@index([catalogShareId])
+}
+
+/// Publicação unificada em portais (conectores plugáveis).
+model PortalListing {
+  id                  String                         @id @default(cuid())
+  lotId               String?
+  propertyId          String?
+  portal              PortalCode
+  externalListingId   String?
+  listingStatus       String?
+  publicationStatus   PortalListingLifecycleStatus   @default(DRAFT)
+  title               String?
+  description         String?                        @db.Text
+  price               Decimal?                       @db.Decimal(18, 2)
+  imagesSnapshot      Json?
+  payloadSnapshot     Json?
+  lastSyncAt          DateTime?
+  lastError           String?                        @db.Text
+  publishedAt         DateTime?
+  unpublishedAt       DateTime?
+  createdById         String
+  createdAt           DateTime                       @default(now())
+  updatedAt           DateTime                       @updatedAt
+
+  lot       Lot?      @relation(fields: [lotId], references: [id], onDelete: Cascade)
+  property  Property? @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  createdBy User      @relation("PortalListingCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([portal])
+  @@index([lotId])
+  @@index([propertyId])
+  @@index([publicationStatus])
+  @@index([createdById])
+}
+
+/// Configuração de conector (credenciais apenas por referência a env).
+model PortalConnectorConfig {
+  id                  String     @id @default(cuid())
+  portal              PortalCode
+  label               String
+  credentialsEnvKey   String?
+  enabled             Boolean    @default(false)
+  metadataJson        Json?
+  createdById         String
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+
+  createdBy User @relation(fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@unique([portal, label])
+}
+
+/// Lead recebido de portal externo (normalizado antes do CRM).
+model ExternalPortalLead {
+  id                String                  @id @default(cuid())
+  portal            PortalCode
+  externalLeadId    String
+  listingReference  String?
+  rawPayload        Json
+  dedupeKey         String                  @unique
+  leadId            String?
+  status            ExternalLeadIngestStatus  @default(RECEIVED)
+  errorMessage      String?                 @db.Text
+  createdAt         DateTime                @default(now())
+  processedAt       DateTime?
+
+  lead Lead? @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
+  @@index([portal])
+  @@index([createdAt])
+  @@index([status])
+}
+
+model InAppNotification {
+  id           String    @id @default(cuid())
+  userId       String
+  type         String
+  title        String
+  body         String?   @db.Text
+  metadataJson Json?
+  readAt       DateTime?
+  createdAt    DateTime  @default(now())
+
+  /// Escopo comercial (alertas de disponibilidade / match).
+  developmentId       String? @map("development_id")
+  lotId               String? @map("lot_id")
+  dailyAvailabilityId String? @map("daily_availability_id")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@index([createdAt])
+  @@index([userId, developmentId])
+  @@index([dailyAvailabilityId])
+  @@index([userId, type, dailyAvailabilityId, lotId])
 }

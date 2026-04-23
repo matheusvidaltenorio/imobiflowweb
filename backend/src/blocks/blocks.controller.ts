@@ -17,7 +17,8 @@ export class BlocksController {
   }
 
   @Get(':id')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.CLIENTE, UserRole.CORRETOR, UserRole.ADMIN)
   findOne(@Param('id') id: string) {
     return this.blocks.findById(id);
   }

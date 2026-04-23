@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useToast } from '@/components/ui/toaster';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/lib/auth-context';
 
 type MetaStatus = { configured: boolean };
 
@@ -51,6 +52,8 @@ async function fetchMetaConnectUrl(scope: 'minimal' | 'extended'): Promise<strin
 export function MetaSocialPanel({ compact = false }: Props) {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
 
   const { data: metaStatus, isLoading: statusLoading } = useQuery({
     queryKey: ['social', 'meta-status'],
@@ -138,8 +141,10 @@ export function MetaSocialPanel({ compact = false }: Props) {
     : !serverReady
       ? 'Servidor sem META_APP_ID / META_APP_SECRET / META_OAUTH_REDIRECT_URI — peça ao administrador.'
       : hasConnections
-        ? `${connections!.length} página(s) do Facebook sincronizada(s). Escolha a página padrão para publicar pelo sistema.`
-        : 'Nenhuma página conectada ainda. Comece pela conexão básica; use permissões estendidas para publicar no feed.';
+        ? `${connections!.length} página(s) do Facebook sincronizada(s).${isAdmin ? ' Escolha a página padrão para publicar pelo sistema.' : ' A publicação usa a página definida pelo administrador.'}`
+        : isAdmin
+          ? 'Nenhuma página conectada ainda. Comece pela conexão básica; use permissões estendidas para publicar no feed.'
+          : 'Nenhuma página Meta disponível. Peça a um administrador para conectar em Integrações.';
 
   if (compact) {
     return (
@@ -155,17 +160,19 @@ export function MetaSocialPanel({ compact = false }: Props) {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="gap-1.5 font-semibold"
-              disabled={connectPending || loading || !serverReady}
-              onClick={() => connectBasic.mutate()}
-            >
-              {connectBasic.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ExternalLink className="h-3.5 w-3.5" />}
-              Conectar ou atualizar Meta
-            </Button>
+            {isAdmin ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-1.5 font-semibold"
+                disabled={connectPending || loading || !serverReady}
+                onClick={() => connectBasic.mutate()}
+              >
+                {connectBasic.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ExternalLink className="h-3.5 w-3.5" />}
+                Conectar ou atualizar Meta
+              </Button>
+            ) : null}
             <Link
               href="/integrations"
               className="text-xs font-bold text-primary-700 underline-offset-2 hover:underline"
@@ -208,27 +215,36 @@ export function MetaSocialPanel({ compact = false }: Props) {
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-        <Button
-          type="button"
-          variant="brand"
-          className="gap-2"
-          disabled={connectPending || loading || !serverReady}
-          onClick={() => connectBasic.mutate()}
-        >
-          {connectBasic.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
-          Conectar Facebook / Instagram
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          className="gap-2"
-          disabled={connectPending || loading || !serverReady}
-          onClick={() => connectExtended.mutate()}
-          title="Inclui permissões para publicar no Facebook/Instagram pelo ImobiFlow"
-        >
-          {connectExtended.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
-          Permissões para publicar
-        </Button>
+        {isAdmin ? (
+          <>
+            <Button
+              type="button"
+              variant="brand"
+              className="gap-2"
+              disabled={connectPending || loading || !serverReady}
+              onClick={() => connectBasic.mutate()}
+            >
+              {connectBasic.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
+              Conectar Facebook / Instagram
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="gap-2"
+              disabled={connectPending || loading || !serverReady}
+              onClick={() => connectExtended.mutate()}
+              title="Inclui permissões para publicar no Facebook/Instagram pelo ImobiFlow"
+            >
+              {connectExtended.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
+              Permissões para publicar
+            </Button>
+          </>
+        ) : (
+          <p className="text-sm text-slate-600">
+            Apenas <strong className="font-semibold text-primary-900">administradores</strong> podem conectar ou desconectar a Meta.
+            Corretores publicam usando a página já configurada pela equipe.
+          </p>
+        )}
         {connectPending ? (
           <span className="text-xs text-gray-500">Redirecionando para a Meta na mesma aba…</span>
         ) : null}
@@ -277,7 +293,7 @@ export function MetaSocialPanel({ compact = false }: Props) {
                       <p className="mt-1 text-[11px] text-slate-500">Estado: {c.status}</p>
                     </div>
                     <div className="flex flex-shrink-0 flex-col gap-1.5 sm:items-end">
-                      {!c.isDefault ? (
+                      {isAdmin && !c.isDefault ? (
                         <Button
                           type="button"
                           variant="outline"
@@ -290,25 +306,27 @@ export function MetaSocialPanel({ compact = false }: Props) {
                           Usar como padrão
                         </Button>
                       ) : null}
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 gap-1 text-xs text-red-700 hover:bg-red-50 hover:text-red-800"
-                        disabled={disconnect.isPending}
-                        onClick={() => {
-                          if (
-                            typeof window !== 'undefined' &&
-                            !window.confirm('Remover esta página do ImobiFlow? Você poderá conectar de novo depois.')
-                          ) {
-                            return;
-                          }
-                          disconnect.mutate(c.id);
-                        }}
-                      >
-                        {disconnect.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Unlink className="h-3 w-3" />}
-                        Desconectar
-                      </Button>
+                      {isAdmin ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 gap-1 text-xs text-red-700 hover:bg-red-50 hover:text-red-800"
+                          disabled={disconnect.isPending}
+                          onClick={() => {
+                            if (
+                              typeof window !== 'undefined' &&
+                              !window.confirm('Remover esta página do ImobiFlow? Você poderá conectar de novo depois.')
+                            ) {
+                              return;
+                            }
+                            disconnect.mutate(c.id);
+                          }}
+                        >
+                          {disconnect.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Unlink className="h-3 w-3" />}
+                          Desconectar
+                        </Button>
+                      ) : null}
                     </div>
                   </div>
                 </li>

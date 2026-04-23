@@ -3,7 +3,6 @@ import {
   LeadStatus,
   MarketingCampaignStatus,
   Prisma,
-  PropertyStatus,
   UserRole,
   VisitStatus,
 } from '@prisma/client';
@@ -454,34 +453,38 @@ export class CommercialAnalyticsService {
     });
     const userMap = Object.fromEntries(users.map((u) => [u.id, u.name]));
 
-    const visitCounts = await Promise.all(
-      brokerIds.map((bid) =>
-        this.prisma.visit.count({
+    const visitMap: Record<string, number> = {};
+    const saleMap: Record<string, number> = {};
+    if (brokerIds.length) {
+      const [visitGroups, saleGroups] = await Promise.all([
+        this.prisma.visit.groupBy({
+          by: ['userId'],
           where: {
-            userId: bid,
+            userId: { in: brokerIds },
             scheduledAt: { gte: range.start, lte: range.end },
           },
+          _count: true,
         }),
-      ),
-    );
-    const saleCounts = await Promise.all(
-      brokerIds.map((bid) =>
-        this.prisma.sale.count({
+        this.prisma.sale.groupBy({
+          by: ['userId'],
           where: {
-            userId: bid,
+            userId: { in: brokerIds },
             soldAt: { gte: range.start, lte: range.end },
           },
+          _count: true,
         }),
-      ),
-    );
+      ]);
+      for (const g of visitGroups) visitMap[g.userId] = g._count;
+      for (const g of saleGroups) saleMap[g.userId] = g._count;
+    }
 
     const topBrokers = brokersRaw
-      .map((b, i) => ({
+      .map((b) => ({
         userId: b.userId!,
         name: userMap[b.userId!] ?? b.userId!,
         leads: b._count,
-        visits: visitCounts[i] ?? 0,
-        sales: saleCounts[i] ?? 0,
+        visits: visitMap[b.userId!] ?? 0,
+        sales: saleMap[b.userId!] ?? 0,
       }))
       .sort((a, b) => b.leads - a.leads)
       .slice(0, 10);
@@ -493,54 +496,86 @@ export class CommercialAnalyticsService {
     });
     const devMap = Object.fromEntries(devs.map((d) => [d.id, d]));
 
-    const topDevelopments = await Promise.all(
-      developmentsRaw.slice(0, 10).map(async (d) => {
+    const devTopSlice = developmentsRaw.slice(0, 10);
+    const devIdsTop = devTopSlice.map((d) => d.developmentId).filter((id): id is string => !!id);
+    const lotsAvailByDev: Record<string, number> = {};
+    if (devIdsTop.length) {
+      const availRows = await this.prisma.$queryRaw<Array<{ did: string; cnt: bigint }>>(
+        Prisma.sql`
+          SELECT b."developmentId" AS did, COUNT(lot.id)::bigint AS cnt
+          FROM "Lot" lot
+          INNER JOIN "Block" b ON b.id = lot."blockId"
+          WHERE b."developmentId" IN (${Prisma.join(devIdsTop)})
+            AND lot.status = ${'DISPONIVEL'}::"PropertyStatus"
+          GROUP BY b."developmentId"
+        `,
+      );
+      for (const r of availRows) {
+        lotsAvailByDev[r.did] = Number(r.cnt);
+      }
+    }
+
+    const topDevelopments = devTopSlice
+      .map((d) => {
         const meta = devMap[d.developmentId!];
-        const lotsAvailable = await this.prisma.lot.count({
-          where: {
-            block: { developmentId: d.developmentId! },
-            status: PropertyStatus.DISPONIVEL,
-          },
-        });
         return {
           developmentId: d.developmentId!,
           name: meta?.name ?? '—',
           city: meta?.city ?? null,
           leads: d._count,
-          lotsAvailable,
+          lotsAvailable: lotsAvailByDev[d.developmentId!] ?? 0,
         };
-      }),
-    );
-    topDevelopments.sort((a, b) => b.leads - a.leads);
+      })
+      .sort((a, b) => b.leads - a.leads);
 
     const lotsStatusMap = Object.fromEntries(lotsGroup.map((r) => [r.status, r._count])) as Record<
       string,
       number
     >;
 
-    const campaignMetrics = await Promise.all(
-      campaignsRaw.map(async (c) => {
-        const [lc, vc] = await Promise.all([
-          this.prisma.lead.count({ where: { marketingCampaign: { id: c.id } } }),
-          this.prisma.visit.count({
-            where: {
-              lead: { marketingCampaign: { id: c.id } },
-              scheduledAt: { gte: range.start, lte: range.end },
-            },
-          }),
-        ]);
-        return {
-          id: c.id,
-          title: c.title,
-          status: c.status,
-          publishedAt: c.campaignPublishedAt?.toISOString() ?? null,
-          leadsCount: lc,
-          visitsFromLeads: vc,
-        };
-      }),
-    );
+    const campaignIds = campaignsRaw.map((c) => c.id);
+    const leadCountByCampaign: Record<string, number> = {};
+    const visitCountByCampaign: Record<string, number> = {};
 
-    campaignMetrics.sort((a, b) => b.leadsCount - a.leadsCount);
+    if (campaignIds.length) {
+      const [leadGroups, visitRows] = await Promise.all([
+        this.prisma.lead.groupBy({
+          by: ['marketingCampaignId'],
+          where: { marketingCampaignId: { in: campaignIds } },
+          _count: true,
+        }),
+        this.prisma.$queryRaw<Array<{ cid: string; cnt: bigint }>>(
+          Prisma.sql`
+            SELECT l.marketing_campaign_id AS cid, COUNT(v.id)::bigint AS cnt
+            FROM "Visit" v
+            INNER JOIN "Lead" l ON l.id = v."leadId"
+            WHERE l.marketing_campaign_id IN (${Prisma.join(campaignIds)})
+              AND v."scheduledAt" >= ${range.start}
+              AND v."scheduledAt" <= ${range.end}
+            GROUP BY l.marketing_campaign_id
+          `,
+        ),
+      ]);
+      for (const g of leadGroups) {
+        if (g.marketingCampaignId) {
+          leadCountByCampaign[g.marketingCampaignId] = g._count;
+        }
+      }
+      for (const r of visitRows) {
+        visitCountByCampaign[r.cid] = Number(r.cnt);
+      }
+    }
+
+    const campaignMetrics = campaignsRaw
+      .map((c) => ({
+        id: c.id,
+        title: c.title,
+        status: c.status,
+        publishedAt: c.campaignPublishedAt?.toISOString() ?? null,
+        leadsCount: leadCountByCampaign[c.id] ?? 0,
+        visitsFromLeads: visitCountByCampaign[c.id] ?? 0,
+      }))
+      .sort((a, b) => b.leadsCount - a.leadsCount);
 
     return {
       meta: {

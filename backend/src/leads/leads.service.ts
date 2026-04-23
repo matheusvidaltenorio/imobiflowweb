@@ -9,6 +9,7 @@ import { UserRole, LeadStatus, PropertyStatus, Prisma } from '@prisma/client';
 import { sanitizeInput } from '../common/utils/xss.util';
 import { LotScoringService } from '../lot-scoring/lot-scoring.service';
 import { ClosingPredictionService } from '../closing-prediction/closing-prediction.service';
+import { AuditService } from '../audit/audit.service';
 
 const HOT_INTERACTION_THRESHOLD = 3;
 const ALLOWED_LEAD_SOURCES = [
@@ -52,6 +53,7 @@ const leadInclude = {
     },
   },
   interactions: { orderBy: { createdAt: 'desc' as const }, take: 50 },
+  marketingCampaign: { select: { id: true, title: true } },
 } as const;
 
 export type LeadsListFilters = {
@@ -70,6 +72,7 @@ export class LeadsService {
     private prisma: PrismaService,
     private scoring: LotScoringService,
     private closing: ClosingPredictionService,
+    private audit: AuditService,
   ) {}
 
   private async brokerDevelopmentIds(userId: string, role: UserRole): Promise<string[]> {
@@ -120,11 +123,78 @@ export class LeadsService {
     return admin.id;
   }
 
+  private async resolveMarketingCampaignForPublicLead(
+    marketingCampaignId: string | undefined,
+    ctx:
+      | { kind: 'property'; property: { developmentId: string | null } }
+      | { kind: 'lot'; lotId: string }
+      | { kind: 'development'; development: { id: string } },
+  ): Promise<string | undefined> {
+    if (!marketingCampaignId) return undefined;
+
+    const campaign = await this.prisma.marketingCampaign.findUnique({
+      where: { id: marketingCampaignId },
+      select: { id: true, developmentId: true, lotId: true, blockId: true },
+    });
+    if (!campaign) {
+      throw new BadRequestException('Campanha de marketing inválida');
+    }
+
+    if (ctx.kind === 'property') {
+      if (campaign.lotId || campaign.blockId) {
+        throw new BadRequestException('Esta campanha não corresponde ao contexto do imóvel');
+      }
+      if (campaign.developmentId && ctx.property.developmentId !== campaign.developmentId) {
+        throw new BadRequestException('Esta campanha não corresponde ao empreendimento do imóvel');
+      }
+      return campaign.id;
+    }
+
+    if (ctx.kind === 'lot') {
+      const lot = await this.prisma.lot.findUnique({
+        where: { id: ctx.lotId },
+        include: { block: true },
+      });
+      if (!lot) throw new NotFoundException('Lote não encontrado');
+
+      if (campaign.lotId) {
+        if (campaign.lotId !== ctx.lotId) {
+          throw new BadRequestException('Esta campanha não corresponde ao lote informado');
+        }
+        return campaign.id;
+      }
+      if (campaign.blockId) {
+        if (lot.blockId !== campaign.blockId) {
+          throw new BadRequestException('Esta campanha não corresponde à quadra do lote');
+        }
+        return campaign.id;
+      }
+      if (campaign.developmentId) {
+        if (lot.block.developmentId !== campaign.developmentId) {
+          throw new BadRequestException('Esta campanha não corresponde ao loteamento do lote');
+        }
+        return campaign.id;
+      }
+      return campaign.id;
+    }
+
+    if (campaign.lotId || campaign.blockId) {
+      throw new BadRequestException(
+        'Esta campanha é específica de lote ou quadra e não pode ser usada neste formulário',
+      );
+    }
+    if (campaign.developmentId && campaign.developmentId !== ctx.development.id) {
+      throw new BadRequestException('Esta campanha não corresponde ao loteamento informado');
+    }
+    return campaign.id;
+  }
+
   async create(
     data: {
       propertyId?: string;
       lotId?: string;
       developmentId?: string;
+      marketingCampaignId?: string;
       name: string;
       email: string;
       phone?: string;
@@ -142,17 +212,30 @@ export class LeadsService {
     }
 
     let activityUserId: string;
+    let resolvedMarketingCampaignId: string | undefined;
 
     if (data.propertyId) {
       const property = await this.prisma.property.findUnique({ where: { id: data.propertyId } });
       if (!property) throw new NotFoundException('Imóvel não encontrado');
       activityUserId = property.userId;
+      resolvedMarketingCampaignId = await this.resolveMarketingCampaignForPublicLead(
+        data.marketingCampaignId,
+        { kind: 'property', property },
+      );
     } else if (data.lotId) {
       activityUserId = await this.activityOwnerForLot(data.lotId);
+      resolvedMarketingCampaignId = await this.resolveMarketingCampaignForPublicLead(
+        data.marketingCampaignId,
+        { kind: 'lot', lotId: data.lotId },
+      );
     } else {
       const dev = await this.prisma.development.findUnique({ where: { id: data.developmentId! } });
       if (!dev) throw new NotFoundException('Loteamento não encontrado');
       activityUserId = await this.activityOwnerForDevelopment(data.developmentId!);
+      resolvedMarketingCampaignId = await this.resolveMarketingCampaignForPublicLead(
+        data.marketingCampaignId,
+        { kind: 'development', development: dev },
+      );
     }
 
     const src = data.leadSource?.toUpperCase().replace('Á', 'A');
@@ -177,6 +260,7 @@ export class LeadsService {
         source: data.source,
         leadSource: leadSource ?? data.source,
         interactionCount: 1,
+        marketingCampaignId: resolvedMarketingCampaignId ?? null,
       },
       include: leadInclude,
     });
@@ -207,6 +291,7 @@ export class LeadsService {
           propertyId: data.propertyId,
           lotId: data.lotId,
           developmentId: data.developmentId,
+          marketingCampaignId: resolvedMarketingCampaignId,
         } as object,
         ipAddress: ip,
       },
@@ -546,6 +631,17 @@ export class LeadsService {
         data: { status },
       });
     });
+
+    if (lead.status !== status) {
+      void this.audit.logChange({
+        userId,
+        action: 'LEAD_STATUS_UPDATE',
+        entity: 'Lead',
+        entityId: leadId,
+        before: { status: lead.status },
+        after: { status },
+      });
+    }
 
     if (lead.lotId) {
       await this.scoring.recalculateLotDevelopmentByLotId(lead.lotId);

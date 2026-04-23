@@ -70,7 +70,7 @@ export class SocialController {
   }
 
   @Post('meta/select-page')
-  @Roles(UserRole.CORRETOR, UserRole.ADMIN)
+  @Roles(UserRole.ADMIN)
   selectMetaPage(
     @CurrentUser('id') userId: string,
     @CurrentUser('role') role: UserRole,
@@ -81,7 +81,7 @@ export class SocialController {
 
   /** Desconecta uma página (mesmo efeito de DELETE /social/connections/:id). */
   @Post('meta/disconnect')
-  @Roles(UserRole.CORRETOR, UserRole.ADMIN)
+  @Roles(UserRole.ADMIN)
   disconnectMeta(
     @CurrentUser('id') userId: string,
     @CurrentUser('role') role: UserRole,
@@ -121,13 +121,14 @@ export class SocialController {
 
   /** @deprecated Use meta/connect */
   @Get('meta/start')
-  @Roles(UserRole.CORRETOR, UserRole.ADMIN)
+  @Roles(UserRole.ADMIN)
   startMetaLegacy(@CurrentUser('id') userId: string, @Query('scope') scope?: string) {
     return this.startMetaOAuth(userId, this.parseScopeQuery(scope));
   }
 
+  /** OAuth Meta: apenas administradores iniciam conexão (tokens ficam no servidor). */
   @Get('meta/connect')
-  @Roles(UserRole.CORRETOR, UserRole.ADMIN)
+  @Roles(UserRole.ADMIN)
   connectMeta(@CurrentUser('id') userId: string, @Query('scope') scope?: string) {
     return this.startMetaOAuth(userId, this.parseScopeQuery(scope));
   }
@@ -275,7 +276,7 @@ export class SocialController {
   }
 
   @Delete('connections/:id')
-  @Roles(UserRole.CORRETOR, UserRole.ADMIN)
+  @Roles(UserRole.ADMIN)
   removeConnection(
     @CurrentUser('id') userId: string,
     @CurrentUser('role') role: UserRole,

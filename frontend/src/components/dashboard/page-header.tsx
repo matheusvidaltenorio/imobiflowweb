@@ -23,7 +23,7 @@ export function PageHeader({ title, description, breadcrumbs, actions, className
               {item.href ? (
                 <Link
                   href={item.href}
-                  className="font-medium text-gray-500 transition-colors hover:text-primary-800 hover:underline"
+                  className="rounded-md font-medium text-gray-500 transition-colors hover:text-primary-800 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600/70 focus-visible:ring-offset-2"
                 >
                   {item.label}
                 </Link>

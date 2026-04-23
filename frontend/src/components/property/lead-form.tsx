@@ -19,7 +19,14 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>;
 
-export function LeadForm({ propertyId }: { propertyId: string }) {
+export function LeadForm({
+  propertyId,
+  marketingCampaignId,
+}: {
+  propertyId: string;
+  /** Atribuição de campanha (ex.: `?marketingCampaignId=` na URL). */
+  marketingCampaignId?: string;
+}) {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
@@ -32,7 +39,11 @@ export function LeadForm({ propertyId }: { propertyId: string }) {
   async function onSubmit(data: FormData) {
     setLoading(true);
     try {
-      await api.post('/leads', { propertyId, ...data });
+      await api.post('/leads', {
+        propertyId,
+        ...(marketingCampaignId ? { marketingCampaignId } : {}),
+        ...data,
+      });
       toast({ title: 'Mensagem enviada!', description: 'Entraremos em contato em breve.', type: 'success' });
       reset();
     } catch {

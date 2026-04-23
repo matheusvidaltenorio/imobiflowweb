@@ -34,6 +34,7 @@ export class LeadsController {
       propertyId?: string;
       lotId?: string;
       developmentId?: string;
+      marketingCampaignId?: string;
       name: string;
       email: string;
       phone?: string;

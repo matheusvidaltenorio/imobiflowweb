@@ -15,6 +15,7 @@ import {
   MessageSquare,
   Share2,
   Sparkles,
+  Bell,
   Target,
   TrendingDown,
   TrendingUp,
@@ -27,6 +28,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/dashboard/page-header';
+import { PageShell } from '@/components/dashboard/page-shell';
 import { MetaSocialPanel } from '@/components/integrations/meta-social-panel';
 import { useAuth } from '@/lib/auth-context';
 import { cn } from '@/lib/utils';
@@ -148,10 +150,17 @@ type DashboardData = {
   }>;
 };
 
+type AvailabilityNotifSummary = {
+  since: string;
+  unreadAvailability: number;
+  byType: Array<{ type: string; count: number }>;
+};
+
 export default function DashboardPage() {
   const { user } = useAuth();
   const { data, isLoading } = useQuery({
     queryKey: ['dashboard-stats'],
+    staleTime: 90_000,
     queryFn: async () => {
       const { data } = await api.get<DashboardData>('/dashboard');
       return data;
@@ -159,13 +168,25 @@ export default function DashboardPage() {
     enabled: !!user,
   });
 
+  const { data: availSummary } = useQuery({
+    queryKey: ['notifications-availability-summary'],
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data } = await api.get<AvailabilityNotifSummary>('/notifications/availability-summary/today');
+      return data;
+    },
+    enabled: !!user && (user.role === 'CORRETOR' || user.role === 'ADMIN'),
+  });
+
   if (user?.role === 'CLIENTE') {
     return (
-      <main className="p-6 md:p-10">
-        <PageHeader
-          title="Área do cliente"
-          description="Explore favoritos e interesses pelo menu. Estamos aqui para ajudar na sua escolha."
-        />
+      <main className="min-h-0">
+        <PageShell maxWidthClass="max-w-6xl">
+          <PageHeader
+            title="Área do cliente"
+            description="Explore favoritos e interesses pelo menu. Estamos aqui para ajudar na sua escolha."
+          />
+        </PageShell>
       </main>
     );
   }
@@ -276,8 +297,8 @@ export default function DashboardPage() {
   ];
 
   return (
-    <main className="p-6 md:p-10">
-      <div className="mx-auto max-w-6xl">
+    <main className="min-h-0">
+      <PageShell maxWidthClass="max-w-6xl">
         <PageHeader
           title="Dashboard"
           description="Visão operacional dos loteamentos, lotes e relacionamento. Atalhos para o que mais importa no dia a dia do corretor."
@@ -296,6 +317,36 @@ export default function DashboardPage() {
             Painel de loteamentos
           </span>
         </div>
+
+        {availSummary ? (
+          <Card className="mb-6 border-amber-100/90 bg-gradient-to-r from-amber-50/50 via-white to-primary-50/30 p-5 shadow-card">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-900">
+                  <Bell className="h-5 w-5" strokeWidth={1.75} />
+                </span>
+                <div>
+                  <p className="text-sm font-bold text-primary-900">Alertas de disponibilidade (hoje)</p>
+                  <p className="mt-1 text-xs text-gray-600">
+                    {availSummary.unreadAvailability > 0
+                      ? `${availSummary.unreadAvailability} não lido(s) · `
+                      : 'Tudo lido · '}
+                    {availSummary.byType.length
+                      ? availSummary.byType
+                          .map((x) => `${x.type.replace(/^AVAIL_/, '')}: ${x.count}`)
+                          .join(' · ')
+                      : 'Nenhum evento registrado ainda hoje.'}
+                  </p>
+                </div>
+              </div>
+              <Link href="/alerts">
+                <Button type="button" variant="outline" size="sm" className="gap-2 font-bold">
+                  Abrir central de alertas
+                </Button>
+              </Link>
+            </div>
+          </Card>
+        ) : null}
 
         <Card className="mb-6 border-primary-100/90 bg-gradient-to-r from-white via-primary-50/30 to-accent-50/40 p-5 shadow-card">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -944,7 +995,7 @@ export default function DashboardPage() {
             </Card>
           </>
         )}
-      </div>
+      </PageShell>
     </main>
   );
 }

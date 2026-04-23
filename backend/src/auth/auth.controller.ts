@@ -8,6 +8,9 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { Public } from '../common/decorators/public.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { Roles } from '../common/decorators/roles.decorator';
+import { UserRole } from '@prisma/client';
 
 @Controller('auth')
 export class AuthController {
@@ -28,6 +31,7 @@ export class AuthController {
 
   @Public()
   @Post('refresh')
+  @Throttle({ default: { limit: 60, ttl: 60000 } })
   refresh(@Body() dto: RefreshTokenDto) {
     return this.auth.refreshToken(dto.refreshToken);
   }
@@ -44,7 +48,8 @@ export class AuthController {
     return this.auth.resetPassword(dto.token, dto.newPassword);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.CLIENTE, UserRole.CORRETOR, UserRole.ADMIN)
   @Get('me')
   me(@Req() req: { user: unknown }) {
     return req.user;

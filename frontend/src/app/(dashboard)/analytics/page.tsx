@@ -40,6 +40,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PageHeader } from '@/components/dashboard/page-header';
+import { PageShell } from '@/components/dashboard/page-shell';
 
 const STAGE_LABELS: Record<string, string> = {
   NOVO_LEAD: 'Novo lead',
@@ -186,6 +187,7 @@ export default function CommercialAnalyticsPage() {
 
   const { data: developments } = useQuery({
     queryKey: ['developments-options'],
+    staleTime: 10 * 60_000,
     queryFn: async () => {
       const { data } = await api.get<Array<{ id: string; name: string }>>('/developments');
       return data;
@@ -195,6 +197,7 @@ export default function CommercialAnalyticsPage() {
   const { data: brokers } = useQuery({
     queryKey: ['brokers-options'],
     enabled: isAdmin,
+    staleTime: 10 * 60_000,
     queryFn: async () => {
       const { data } = await api.get<Array<{ id: string; name: string }>>('/users?role=CORRETOR');
       return data;
@@ -203,6 +206,7 @@ export default function CommercialAnalyticsPage() {
 
   const { data: campaignOptions } = useQuery({
     queryKey: ['campaigns-analytics-filter'],
+    staleTime: 5 * 60_000,
     queryFn: async () => {
       const { data } = await api.get<CampaignOption[]>('/campaign-studio/campaigns');
       return data;
@@ -217,6 +221,7 @@ export default function CommercialAnalyticsPage() {
     isFetching,
   } = useQuery({
     queryKey: ['commercial-analytics', queryString],
+    staleTime: 90_000,
     queryFn: async () => {
       const { data } = await api.get<CommercialDashboard>(`/analytics/commercial?${queryString}`);
       return data;
@@ -243,7 +248,8 @@ export default function CommercialAnalyticsPage() {
   );
 
   return (
-    <div className="mx-auto max-w-[1600px] px-4 py-6 md:px-6 lg:px-8">
+    <main className="min-h-0">
+      <PageShell>
       <PageHeader
         title="Analytics comercial"
         description="KPIs, funil, origens, campanhas e visão operacional. Os números refletem o período e os filtros selecionados."
@@ -712,7 +718,8 @@ export default function CommercialAnalyticsPage() {
           </section>
         </>
       ) : null}
-    </div>
+      </PageShell>
+    </main>
   );
 }
 

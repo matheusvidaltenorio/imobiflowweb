@@ -8,6 +8,7 @@ import {
   BarChart3,
   Building2,
   CalendarDays,
+  CalendarClock,
   ChevronRight,
   FileText,
   Heart,
@@ -27,6 +28,11 @@ import {
   Users,
   Wallet,
   Radio,
+  Mic,
+  GitMerge,
+  Share2,
+  KeyRound,
+  Bell,
   type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
@@ -57,6 +63,9 @@ const brokerGroups: NavGroup[] = [
       { href: '/campaigns', label: 'Campanhas', icon: Radio },
       { href: '/integrations', label: 'Integrações', icon: Plug },
       { href: '/melhores-lotes', label: 'Melhores lotes', icon: TrendingUp },
+      { href: '/disponiveis-hoje', label: 'Disponíveis hoje', icon: CalendarClock },
+      { href: '/alerts', label: 'Alertas', icon: Bell },
+      { href: '/portal-hub', label: 'Hub de portais', icon: Share2 },
     ],
   },
   {
@@ -64,6 +73,8 @@ const brokerGroups: NavGroup[] = [
     items: [
       { href: '/leads', label: 'CRM / Pipeline', icon: Users },
       { href: '/clients', label: 'Clientes', icon: UserCircle },
+      { href: '/crm/audio', label: 'Cadastro por áudio', icon: Mic },
+      { href: '/crm/matches', label: 'Match inteligente', icon: GitMerge },
     ],
   },
   {
@@ -89,6 +100,13 @@ const adminGroups: NavGroup[] = [
       { href: '/admin/users', label: 'Usuários', icon: Users },
       { href: '/admin/developments', label: 'Loteamentos', icon: MapPinned },
       { href: '/admin/properties', label: 'Imóveis', icon: Building2 },
+      { href: '/admin/daily-availability', label: 'Disponibilidade diária', icon: CalendarClock },
+      { href: '/admin/gestora-access', label: 'Gestoras × loteamentos', icon: KeyRound },
+      { href: '/disponiveis-hoje', label: 'Disponíveis hoje', icon: CalendarClock },
+      { href: '/alerts', label: 'Alertas', icon: Bell },
+      { href: '/portal-hub', label: 'Hub de portais', icon: Share2 },
+      { href: '/crm/audio', label: 'Cadastro por áudio', icon: Mic },
+      { href: '/crm/matches', label: 'Match inteligente', icon: GitMerge },
       { href: '/admin/publication-ops', label: 'Fila de publicações', icon: Activity },
       { href: '/publication', label: 'Centro de publicação', icon: Megaphone },
       { href: '/campaigns', label: 'Campanhas', icon: Radio },
@@ -114,6 +132,16 @@ const clientGroups: NavGroup[] = [
       { href: '/search', label: 'Buscar', icon: Search },
       { href: '/favorites', label: 'Favoritos', icon: Heart },
       { href: '/interests', label: 'Interesses', icon: FileText },
+      { href: '/profile', label: 'Perfil', icon: UserCircle, exact: true },
+    ],
+  },
+];
+
+const gestoraGroups: NavGroup[] = [
+  {
+    title: 'Gestora',
+    items: [
+      { href: '/gestora', label: 'Meus loteamentos', icon: MapPinned, exact: true },
       { href: '/profile', label: 'Perfil', icon: UserCircle, exact: true },
     ],
   },
@@ -150,7 +178,13 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
   };
 
   const groups =
-    user?.role === 'ADMIN' ? adminGroups : user?.role === 'CORRETOR' ? brokerGroups : clientGroups;
+    user?.role === 'ADMIN'
+      ? adminGroups
+      : user?.role === 'CORRETOR'
+        ? brokerGroups
+        : user?.role === 'GESTORA'
+          ? gestoraGroups
+          : clientGroups;
   const isBrokerNav = user?.role === 'ADMIN' || user?.role === 'CORRETOR';
 
   const linkClass = (active: boolean, dark: boolean) =>
@@ -189,7 +223,7 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
         >
           <div className="flex h-16 shrink-0 items-center border-b border-surface-muted px-4">
             <Link
-              href="/"
+              href={user?.role === 'GESTORA' ? '/gestora' : '/'}
               className="text-lg font-bold tracking-tight text-primary-900"
               onClick={onMobileClose}
             >
@@ -359,21 +393,57 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
 export function MobileNavBar({ onOpen }: { onOpen: () => void }) {
   const { user } = useAuth();
   const homeHref =
-    user?.role === 'CORRETOR' || user?.role === 'ADMIN' ? '/dashboard' : '/';
+    user?.role === 'CORRETOR' || user?.role === 'ADMIN'
+      ? '/dashboard'
+      : user?.role === 'GESTORA'
+        ? '/gestora'
+        : '/';
+  const broker = user?.role === 'CORRETOR' || user?.role === 'ADMIN';
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-3 border-b border-surface-muted bg-white/95 px-4 backdrop-blur-md lg:hidden">
+    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b border-surface-muted bg-white/95 px-3 backdrop-blur-md lg:hidden">
       <button
         type="button"
         onClick={onOpen}
-        className="flex h-10 w-10 items-center justify-center rounded-xl border border-surface-muted bg-surface text-primary-900 shadow-sm transition hover:bg-white"
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-surface-muted bg-surface text-primary-900 shadow-sm transition hover:bg-white"
         aria-label="Abrir menu"
       >
         <Menu className="h-5 w-5" strokeWidth={2} />
       </button>
-      <Link href={homeHref} className="text-base font-bold tracking-tight text-primary-950">
+      <Link href={homeHref} className="min-w-0 shrink truncate text-base font-bold tracking-tight text-primary-950">
         Imobi<span className="text-accent-500">Flow</span>
       </Link>
+      {broker ? (
+        <nav
+          className="ml-auto flex shrink-0 items-center gap-0.5 rounded-xl bg-surface/90 p-0.5 ring-1 ring-surface-muted/80"
+          aria-label="Atalhos rápidos"
+        >
+          <Link
+            href="/leads"
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-primary-800 transition hover:bg-white hover:text-accent-600"
+            title="CRM"
+            aria-label="Abrir CRM e leads"
+          >
+            <Users className="h-4 w-4" strokeWidth={2} />
+          </Link>
+          <Link
+            href="/lots"
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-primary-800 transition hover:bg-white hover:text-accent-600"
+            title="Lotes"
+            aria-label="Quadras e lotes"
+          >
+            <LayoutGrid className="h-4 w-4" strokeWidth={2} />
+          </Link>
+          <Link
+            href="/visits/agenda"
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-primary-800 transition hover:bg-white hover:text-accent-600"
+            title="Agenda"
+            aria-label="Agenda de visitas"
+          >
+            <CalendarDays className="h-4 w-4" strokeWidth={2} />
+          </Link>
+        </nav>
+      ) : null}
     </header>
   );
 }

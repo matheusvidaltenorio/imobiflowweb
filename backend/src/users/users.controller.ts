@@ -7,7 +7,8 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { UserRole } from '@prisma/client';
 
 @Controller('users')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.CLIENTE, UserRole.CORRETOR, UserRole.ADMIN, UserRole.GESTORA)
 export class UsersController {
   constructor(private users: UsersService) {}
 

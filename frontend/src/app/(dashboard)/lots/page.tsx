@@ -99,6 +99,7 @@ export default function LotsPage() {
   const developmentId = searchParams.get('development');
   const blockId = searchParams.get('block');
   const focusMap = searchParams.get('focusMap') === '1';
+  const marketingCampaignId = searchParams.get('marketingCampaignId') ?? undefined;
   const developmentMapSectionRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -899,6 +900,7 @@ export default function LotsPage() {
             onOpenChange={(o) => !o && setInterestLot(null)}
             lotId={interestLot.id}
             lotLabel={interestLot.label}
+            marketingCampaignId={marketingCampaignId}
           />
         ) : null}
       </div>

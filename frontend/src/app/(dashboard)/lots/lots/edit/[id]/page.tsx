@@ -54,6 +54,7 @@ export default function EditLotPage() {
   const searchParams = useSearchParams();
   const developmentId = searchParams.get('development');
   const blockId = searchParams.get('block');
+  const marketingCampaignId = searchParams.get('marketingCampaignId') ?? undefined;
   const router = useRouter();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -589,6 +590,7 @@ export default function EditLotPage() {
           onOpenChange={setInterestOpen}
           lotId={id}
           lotLabel={lotCommercialLabel}
+          marketingCampaignId={marketingCampaignId}
         />
     </main>
   );

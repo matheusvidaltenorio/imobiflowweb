@@ -14,14 +14,14 @@ type User = {
   id: string;
   email: string;
   name: string;
-  role: 'CLIENTE' | 'CORRETOR' | 'ADMIN';
+  role: 'CLIENTE' | 'CORRETOR' | 'ADMIN' | 'GESTORA';
   avatar?: string;
 };
 
 type AuthState = {
   user: User | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<User>;
   register: (data: { email: string; password: string; name: string; phone?: string; role?: string }) => Promise<void>;
   logout: () => void;
   refreshUser: () => Promise<void>;
@@ -60,7 +60,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data } = await api.post('/auth/login', { email, password });
     localStorage.setItem('accessToken', data.accessToken);
     localStorage.setItem('refreshToken', data.refreshToken);
-    setUser(data.user);
+    const u = data.user as User;
+    setUser(u);
+    return u;
   }, []);
 
   const register = useCallback(

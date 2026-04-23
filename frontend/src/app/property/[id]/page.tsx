@@ -1,7 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -20,7 +20,9 @@ const PropertyMap = dynamic(() => import('@/components/property/property-map').t
 
 export default function PropertyDetailPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const id = params.id as string;
+  const marketingCampaignId = searchParams.get('marketingCampaignId') ?? undefined;
   const { user, logout } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -284,7 +286,7 @@ export default function PropertyDetailPage() {
         <div className="mt-12 rounded-2xl border border-surface-muted bg-white p-6 shadow-card md:p-8">
           <h2 className="mb-1 text-lg font-bold text-primary-950">Tenho interesse</h2>
           <p className="mb-4 text-sm text-gray-500">Deixe seus dados — o corretor retorna rapidamente.</p>
-          <LeadForm propertyId={id} />
+          <LeadForm propertyId={id} marketingCampaignId={marketingCampaignId} />
         </div>
       </main>
     </div>

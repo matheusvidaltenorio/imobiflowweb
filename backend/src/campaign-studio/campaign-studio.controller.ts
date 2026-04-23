@@ -11,6 +11,7 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { UserRole } from '@prisma/client';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -223,6 +224,7 @@ export class CampaignStudioController {
   }
 
   @Post('campaigns/:id/publish')
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
   publish(
     @CurrentUser('id') userId: string,
     @CurrentUser('role') role: UserRole,

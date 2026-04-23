@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { SocialConnectionStatus, SocialProvider, UserRole } from '@prisma/client';
+import { Prisma, SocialConnectionStatus, SocialProvider, UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { SocialTokenCryptoService } from './social-token-crypto.service';
 
@@ -61,7 +61,12 @@ export class SocialConnectionService {
   }
 
   async list(userId: string, role: UserRole): Promise<SocialConnectionSafe[]> {
-    const where = role === UserRole.ADMIN ? {} : { userId };
+    const where: Prisma.SocialConnectionWhereInput =
+      role === UserRole.ADMIN
+        ? {}
+        : {
+            OR: [{ userId }, { user: { role: UserRole.ADMIN } }],
+          };
     const rows = await this.prisma.socialConnection.findMany({
       where,
       orderBy: [{ isDefault: 'desc' }, { updatedAt: 'desc' }],
@@ -76,6 +81,21 @@ export class SocialConnectionService {
       throw new ForbiddenException('Conexão de outro usuário');
     }
     return row;
+  }
+
+  /**
+   * Corretor pode usar conexões criadas por administrador para publicar (OAuth restrito a admin).
+   */
+  async assertPublishAccess(userId: string, role: UserRole, id: string) {
+    const row = await this.prisma.socialConnection.findUnique({
+      where: { id },
+      include: { user: { select: { role: true } } },
+    });
+    if (!row) throw new NotFoundException('Conexão não encontrada');
+    if (role === UserRole.ADMIN) return row;
+    if (row.userId === userId) return row;
+    if (role === UserRole.CORRETOR && row.user.role === UserRole.ADMIN) return row;
+    throw new ForbiddenException('Sem permissão para usar esta conexão Meta');
   }
 
   async delete(userId: string, role: UserRole, id: string) {
@@ -124,23 +144,36 @@ export class SocialConnectionService {
     explicitConnectionId?: string,
   ): Promise<string> {
     if (explicitConnectionId?.trim()) {
-      const row = await this.assertOwner(userId, role, explicitConnectionId.trim());
+      const row = await this.assertPublishAccess(userId, role, explicitConnectionId.trim());
       return row.id;
     }
-    const def = await this.prisma.socialConnection.findFirst({
-      where: { userId, status: SocialConnectionStatus.ACTIVE, isDefault: true },
+    const active = SocialConnectionStatus.ACTIVE;
+    const ownDef = await this.prisma.socialConnection.findFirst({
+      where: { userId, status: active, isDefault: true },
     });
-    if (def) return def.id;
-    const any = await this.prisma.socialConnection.findFirst({
-      where: { userId, status: SocialConnectionStatus.ACTIVE },
+    if (ownDef) return ownDef.id;
+    const ownAny = await this.prisma.socialConnection.findFirst({
+      where: { userId, status: active },
       orderBy: { updatedAt: 'desc' },
     });
-    if (!any) {
-      throw new BadRequestException(
-        'Nenhuma página Meta conectada. Conecte em Integrações e selecione uma página padrão.',
-      );
+    if (ownAny) return ownAny.id;
+
+    if (role === UserRole.CORRETOR) {
+      const adminDef = await this.prisma.socialConnection.findFirst({
+        where: { status: active, isDefault: true, user: { role: UserRole.ADMIN } },
+        orderBy: { updatedAt: 'desc' },
+      });
+      if (adminDef) return adminDef.id;
+      const adminAny = await this.prisma.socialConnection.findFirst({
+        where: { status: active, user: { role: UserRole.ADMIN } },
+        orderBy: { updatedAt: 'desc' },
+      });
+      if (adminAny) return adminAny.id;
     }
-    return any.id;
+
+    throw new BadRequestException(
+      'Nenhuma página Meta conectada. Peça a um administrador para conectar em Integrações e definir uma página padrão.',
+    );
   }
 
   /** Token de página descriptografado — apenas uso interno (publicação). */
@@ -149,7 +182,7 @@ export class SocialConnectionService {
     facebookPageId: string;
     instagramUserId: string | null;
   }> {
-    const row = await this.assertOwner(userId, role, connectionId);
+    const row = await this.assertPublishAccess(userId, role, connectionId);
     if (row.status !== SocialConnectionStatus.ACTIVE) {
       throw new ForbiddenException('Conexão inativa ou revogada. Reconecte a conta Meta.');
     }

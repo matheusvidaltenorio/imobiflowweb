@@ -30,12 +30,28 @@ import { InstagramAdsModule } from './instagram-ads/instagram-ads.module';
 import { CampaignStudioModule } from './campaign-studio/campaign-studio.module';
 import { SocialModule } from './social/social.module';
 import { AnalyticsModule } from './analytics/analytics.module';
+import { AuditModule } from './audit/audit.module';
+import { HealthModule } from './health/health.module';
+import { DailyAvailabilityModule } from './daily-availability/daily-availability.module';
+import { AudioIngestionModule } from './audio-ingestion/audio-ingestion.module';
+import { MatchingModule } from './matching/matching.module';
+import { CatalogShareModule } from './catalog-share/catalog-share.module';
+import { PortalHubModule } from './portal-hub/portal-hub.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    AuditModule,
+    HealthModule,
+    DailyAvailabilityModule,
+    AudioIngestionModule,
+    MatchingModule,
+    CatalogShareModule,
+    PortalHubModule,
+    NotificationsModule,
     ScheduleModule.forRoot(),
     ThrottlerModule.forRoot([
       { ttl: 1000, limit: 25 },

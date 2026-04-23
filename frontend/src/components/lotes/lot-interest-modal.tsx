@@ -25,11 +25,13 @@ export function LotInterestModal({
   onOpenChange,
   lotId,
   lotLabel,
+  marketingCampaignId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   lotId: string;
   lotLabel: string;
+  marketingCampaignId?: string;
 }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -41,6 +43,7 @@ export function LotInterestModal({
     mutationFn: (d: FormData) =>
       api.post('/leads', {
         lotId,
+        ...(marketingCampaignId ? { marketingCampaignId } : {}),
         name: d.name,
         email: d.email,
         phone: d.phone || undefined,

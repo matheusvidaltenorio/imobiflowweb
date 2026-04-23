@@ -75,6 +75,7 @@ export default function AdminUsersPage() {
                         >
                           <option value="CLIENTE">Cliente</option>
                           <option value="CORRETOR">Corretor</option>
+                          <option value="GESTORA">Gestora</option>
                           <option value="ADMIN">Admin</option>
                         </select>
                       ) : (

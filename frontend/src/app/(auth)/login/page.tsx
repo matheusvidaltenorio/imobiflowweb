@@ -36,9 +36,17 @@ export default function LoginPage() {
   async function onSubmit(data: FormData) {
     setLoading(true);
     try {
-      await login(data.email, data.password);
+      const u = await login(data.email, data.password);
       toast({ title: 'Login realizado!', type: 'success' });
-      router.push('/');
+      if (u.role === 'GESTORA') {
+        router.push('/gestora');
+      } else if (u.role === 'ADMIN') {
+        router.push('/admin');
+      } else if (u.role === 'CORRETOR') {
+        router.push('/dashboard');
+      } else {
+        router.push('/');
+      }
       router.refresh();
     } catch (err: unknown) {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3333/api';

@@ -21,10 +21,24 @@ export default function HomePage() {
             {user ? (
               <>
                 <Link
-                  href={user.role === 'ADMIN' ? '/admin' : user.role === 'CORRETOR' ? '/dashboard' : '/favorites'}
+                  href={
+                    user.role === 'ADMIN'
+                      ? '/admin'
+                      : user.role === 'CORRETOR'
+                        ? '/dashboard'
+                        : user.role === 'GESTORA'
+                          ? '/gestora'
+                          : '/favorites'
+                  }
                   className="text-sm font-semibold text-gray-600 transition hover:text-primary-800"
                 >
-                  {user.role === 'ADMIN' ? 'Admin' : user.role === 'CORRETOR' ? 'Dashboard' : 'Favoritos'}
+                  {user.role === 'ADMIN'
+                    ? 'Admin'
+                    : user.role === 'CORRETOR'
+                      ? 'Dashboard'
+                      : user.role === 'GESTORA'
+                        ? 'Painel gestora'
+                        : 'Favoritos'}
                 </Link>
                 <Link href="/profile" className="text-sm font-semibold text-gray-600 transition hover:text-primary-800">
                   Perfil

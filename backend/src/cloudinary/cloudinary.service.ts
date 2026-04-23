@@ -3,7 +3,16 @@ import { ConfigService } from '@nestjs/config';
 import { v2 as cloudinary } from 'cloudinary';
 
 const MAX_SIZE = 5 * 1024 * 1024; // 5MB
+const MAX_AUDIO_SIZE = 15 * 1024 * 1024; // 15MB
+const MAX_RAW_SIZE = 15 * 1024 * 1024;
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+const ALLOWED_AUDIO = ['audio/webm', 'audio/mpeg', 'audio/mp4', 'audio/wav', 'audio/x-m4a', 'audio/ogg'];
+const ALLOWED_RAW = [
+  'text/csv',
+  'application/csv',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+];
 
 @Injectable()
 export class CloudinaryService {
@@ -48,5 +57,67 @@ export class CloudinaryService {
 
   async deleteImage(publicId: string): Promise<void> {
     await cloudinary.uploader.destroy(publicId);
+  }
+
+  /** Áudio/voz para CRM (resource_type video aceita mp3/m4a/webm no Cloudinary). */
+  async uploadAudio(file: Express.Multer.File, folder = 'imobflow/audio'): Promise<{ url: string; publicId: string }> {
+    if (!file) throw new BadRequestException('Arquivo não enviado');
+    if (file.size > MAX_AUDIO_SIZE) {
+      throw new BadRequestException('Áudio deve ter no máximo 15MB');
+    }
+    if (!ALLOWED_AUDIO.includes(file.mimetype)) {
+      throw new BadRequestException('Formato de áudio não suportado');
+    }
+    return new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          folder,
+          resource_type: 'video',
+        },
+        (error, result) => {
+          if (error) reject(new BadRequestException('Erro no upload: ' + error.message));
+          else if (result)
+            resolve({
+              url: result.secure_url,
+              publicId: result.public_id,
+            });
+          else reject(new BadRequestException('Upload falhou'));
+        },
+      );
+      uploadStream.end(file.buffer);
+    });
+  }
+
+  /** Planilhas (csv/xlsx) para rastreabilidade — resource_type raw. */
+  async uploadSpreadsheet(file: Express.Multer.File, folder = 'imobflow/spreadsheets'): Promise<{ url: string; publicId: string }> {
+    if (!file) throw new BadRequestException('Arquivo não enviado');
+    if (file.size > MAX_RAW_SIZE) {
+      throw new BadRequestException('Arquivo deve ter no máximo 15MB');
+    }
+    const okMime = ALLOWED_RAW.includes(file.mimetype) || file.mimetype === 'text/plain';
+    const okName = /\.(csv|xlsx|xls)$/i.test(file.originalname ?? '');
+    if (!okMime && !okName) {
+      throw new BadRequestException('Formato inválido. Use CSV ou Excel (.xlsx/.xls)');
+    }
+    return new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          folder,
+          resource_type: 'raw',
+          use_filename: true,
+          unique_filename: true,
+        },
+        (error, result) => {
+          if (error) reject(new BadRequestException('Erro no upload: ' + error.message));
+          else if (result)
+            resolve({
+              url: result.secure_url,
+              publicId: result.public_id,
+            });
+          else reject(new BadRequestException('Upload falhou'));
+        },
+      );
+      uploadStream.end(file.buffer);
+    });
   }
 }

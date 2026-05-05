@@ -1,5 +1,5 @@
 import { Prisma, PrismaClient, PropertyStatus, VisitStatus } from '@prisma/client';
-import * as bcrypt from 'bcrypt';
+import { TEST_BROKER_EMAILS } from './test-users.seed';
 
 const DEMO_SOURCE = 'demo_seed_v1';
 const DEMO_RADIUS = 3000;
@@ -192,30 +192,21 @@ const LOT_STATUSES: PropertyStatus[] = [
 export async function seedDemoUniverse(prisma: PrismaClient): Promise<void> {
   console.log('\n[demo] universo de exemplo (idempotente)…');
 
-  const demoHash = await bcrypt.hash('demo123', 10);
-  const demoBrokers: { id: string; email: string; name: string }[] = [];
-
-  for (let i = 1; i <= 5; i += 1) {
-    const email = `demo.corretor.${i}@imobiflow.local`;
-    const u = await prisma.user.upsert({
-      where: { email },
-      update: { password: demoHash, name: `Corretor Demo ${i}`, role: 'CORRETOR', isActive: true },
-      create: {
-        email,
-        password: demoHash,
-        name: `Corretor Demo ${i}`,
-        role: 'CORRETOR',
-        phone: `8899999${1000 + i}`,
-      },
-    });
-    demoBrokers.push({ id: u.id, email, name: u.name });
-  }
-
-  const admin = await prisma.user.findFirst({ where: { role: 'ADMIN' } });
-  const mainBroker = await prisma.user.findFirst({
-    where: { email: { in: ['corretor@imobflow.com', 'corretor@imobiflow.com'] } },
+  const demoBrokerRows = await prisma.user.findMany({
+    where: { email: { in: [...TEST_BROKER_EMAILS] }, role: 'CORRETOR' },
+    orderBy: { email: 'asc' },
   });
-  const brokerForClients = mainBroker ?? demoBrokers[0]!;
+  if (demoBrokerRows.length < 5) {
+    throw new Error(
+      `[demo] Esperados 5 corretores ${TEST_BROKER_EMAILS.join(', ')} — rode upsertTestUsers antes do demo-universe.`,
+    );
+  }
+  const demoBrokers = demoBrokerRows.map((u) => ({ id: u.id, email: u.email, name: u.name }));
+
+  const admin = await prisma.user.findFirst({ where: { email: 'admin@teste.com' } });
+  const mainBroker =
+    (await prisma.user.findFirst({ where: { email: 'corretor1@teste.com' } })) ?? demoBrokers[0]!;
+  const brokerForClients = mainBroker;
 
   const devIds: string[] = [];
 
@@ -357,7 +348,7 @@ export async function seedDemoUniverse(prisma: PrismaClient): Promise<void> {
   const firstNames = ['Mariana', 'Carlos', 'Fernanda', 'Ricardo', 'Juliana'];
   const lastNames = ['Alves', 'Monteiro', 'Santos', 'Lima', 'Costa'];
   for (let i = 0; i < 5; i += 1) {
-    const email = `demo.cliente.${i + 1}@example.test`;
+    const email = `cliente${i + 1}@teste.com`;
     let c = await prisma.client.findFirst({ where: { email } });
     if (!c) {
       c = await prisma.client.create({
@@ -477,7 +468,7 @@ export async function seedDemoUniverse(prisma: PrismaClient): Promise<void> {
     }
   }
 
-  console.log('[demo] corretores demo: 5 | loteamentos demo: 5 | POIs seed: 10 por loteamento (cache no banco)');
+  console.log('[demo] corretores @teste.com: 5 | loteamentos demo: 5 | POIs seed: 10 por loteamento (cache no banco)');
   console.log('[demo] clientes, leads, visitas, interações e anúncios Instagram (quando aplicável)');
 }
 

@@ -52,7 +52,7 @@ O frontend ficará em **http://localhost:3000**
 ## 5. Testar
 
 Acesse **http://localhost:3000** e faça login:
-- **Admin:** admin@imobflow.com / admin123
+- **Contas de teste:** `admin@teste.com`, `corretor1@teste.com`, `cliente1@teste.com` — senha **`123456`** (ver README).
 - **Corretor:** corretor@imobflow.com / corretor123
 - **Cliente:** cliente@imobflow.com / cliente123
 

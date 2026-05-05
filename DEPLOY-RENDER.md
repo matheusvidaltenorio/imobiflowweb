@@ -86,7 +86,7 @@ O projeto usa **PostgreSQL do Render** (imobflow-db). Migrations são executadas
 - No Render Dashboard > imobflow-api > Shell, execute: `npx prisma db seed`
 - Ou adicione temporariamente ao startCommand: `npx prisma migrate deploy && npx prisma db seed && npm run start:prod` (depois remova o seed)
 
-Usuários seed: admin@imobflow.com / admin123 | corretor@imobflow.com / corretor123 | cliente@imobflow.com / cliente123
+Usuários seed (após `db seed`): ver README — padrão `*@teste.com` / senha `123456`.
 
 Para migrar de um banco local/Docker/Supabase:
 1. As migrations rodam automaticamente no primeiro deploy

@@ -10,6 +10,7 @@ import { sanitizeInput } from '../common/utils/xss.util';
 import { LotScoringService } from '../lot-scoring/lot-scoring.service';
 import { ClosingPredictionService } from '../closing-prediction/closing-prediction.service';
 import { AuditService } from '../audit/audit.service';
+import { ChatService } from '../chat/chat.service';
 
 const HOT_INTERACTION_THRESHOLD = 3;
 const ALLOWED_LEAD_SOURCES = [
@@ -73,6 +74,7 @@ export class LeadsService {
     private scoring: LotScoringService,
     private closing: ClosingPredictionService,
     private audit: AuditService,
+    private chat: ChatService,
   ) {}
 
   private async brokerDevelopmentIds(userId: string, role: UserRole): Promise<string[]> {
@@ -641,6 +643,7 @@ export class LeadsService {
         before: { status: lead.status },
         after: { status },
       });
+      void this.chat.onLeadStatusChanged(leadId, lead.status, status);
     }
 
     if (lead.lotId) {

@@ -1,7 +1,10 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, SocialConnectionStatus, SocialProvider, UserRole } from '@prisma/client';
+import { SocialConnectionStatus, SocialProvider, UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { SocialTokenCryptoService } from './social-token-crypto.service';
+
+/** Um registro “placeholder” quando só há login OAuth basic (sem pages_show_list). */
+export const META_BASIC_USER_SENTINEL_PAGE_ID = '__IMOBFLOW_META_BASIC_USER__';
 
 export type SocialConnectionSafe = {
   id: string;
@@ -18,6 +21,8 @@ export type SocialConnectionSafe = {
   lastSyncAt: Date | null;
   lastError: string | null;
   hasInstagramBusiness: boolean;
+  /** Conexão só com escopo público (ex.: public_profile), sem página para publicação. */
+  isMetaBasicOnly: boolean;
 };
 
 @Injectable()
@@ -42,6 +47,7 @@ export class SocialConnectionService {
     lastSyncAt: Date | null;
     lastError: string | null;
   }): SocialConnectionSafe {
+    const basicOnly = row.status === SocialConnectionStatus.META_BASIC_CONNECTED;
     return {
       id: row.id,
       provider: row.provider,
@@ -57,45 +63,35 @@ export class SocialConnectionService {
       lastSyncAt: row.lastSyncAt,
       lastError: row.lastError ? row.lastError.slice(0, 500) : null,
       hasInstagramBusiness: !!row.instagramUserId?.trim(),
+      isMetaBasicOnly: basicOnly,
     };
   }
 
-  async list(userId: string, role: UserRole): Promise<SocialConnectionSafe[]> {
-    const where: Prisma.SocialConnectionWhereInput =
-      role === UserRole.ADMIN
-        ? {}
-        : {
-            OR: [{ userId }, { user: { role: UserRole.ADMIN } }],
-          };
+  async list(userId: string, _role: UserRole): Promise<SocialConnectionSafe[]> {
     const rows = await this.prisma.socialConnection.findMany({
-      where,
+      where: { userId },
       orderBy: [{ isDefault: 'desc' }, { updatedAt: 'desc' }],
     });
     return rows.map((r) => this.toSafe(r));
   }
 
-  async assertOwner(userId: string, role: UserRole, id: string) {
+  async assertOwner(userId: string, _role: UserRole, id: string) {
     const row = await this.prisma.socialConnection.findUnique({ where: { id } });
     if (!row) throw new NotFoundException('Conexão não encontrada');
-    if (role !== UserRole.ADMIN && row.userId !== userId) {
+    if (row.userId !== userId) {
       throw new ForbiddenException('Conexão de outro usuário');
     }
     return row;
   }
 
-  /**
-   * Corretor pode usar conexões criadas por administrador para publicar (OAuth restrito a admin).
-   */
-  async assertPublishAccess(userId: string, role: UserRole, id: string) {
-    const row = await this.prisma.socialConnection.findUnique({
-      where: { id },
-      include: { user: { select: { role: true } } },
-    });
+  /** Publicação e escolha de conexão: só o dono do registro (cada usuário conecta a própria Meta). */
+  async assertPublishAccess(userId: string, _role: UserRole, id: string) {
+    const row = await this.prisma.socialConnection.findUnique({ where: { id } });
     if (!row) throw new NotFoundException('Conexão não encontrada');
-    if (role === UserRole.ADMIN) return row;
-    if (row.userId === userId) return row;
-    if (role === UserRole.CORRETOR && row.user.role === UserRole.ADMIN) return row;
-    throw new ForbiddenException('Sem permissão para usar esta conexão Meta');
+    if (row.userId !== userId) {
+      throw new ForbiddenException('Sem permissão para usar esta conexão Meta');
+    }
+    return row;
   }
 
   async delete(userId: string, role: UserRole, id: string) {
@@ -109,6 +105,11 @@ export class SocialConnectionService {
    */
   async setDefaultConnection(userId: string, role: UserRole, connectionId: string) {
     const row = await this.assertOwner(userId, role, connectionId);
+    if (row.status === SocialConnectionStatus.META_BASIC_CONNECTED) {
+      throw new BadRequestException(
+        'Primeiro conceda permissões de páginas/publicação para escolher uma página padrão.',
+      );
+    }
     await this.prisma.$transaction([
       this.prisma.socialConnection.updateMany({
         where: { userId: row.userId },
@@ -123,12 +124,14 @@ export class SocialConnectionService {
   }
 
   /**
-   * Se só existir uma conexão, marca como padrão.
+   * Se só existir uma conexão publicável (ACTIVE), marca como padrão.
    */
   async ensureDefaultIfSingle(userId: string) {
-    const count = await this.prisma.socialConnection.count({ where: { userId } });
-    if (count !== 1) return;
-    const only = await this.prisma.socialConnection.findFirst({ where: { userId } });
+    const actionable = await this.prisma.socialConnection.findMany({
+      where: { userId, status: SocialConnectionStatus.ACTIVE },
+    });
+    if (actionable.length !== 1) return;
+    const only = actionable[0];
     if (only && !only.isDefault) {
       await this.prisma.socialConnection.update({
         where: { id: only.id },
@@ -137,14 +140,74 @@ export class SocialConnectionService {
     }
   }
 
+  /**
+   * Remove o registro de login OAuth básico (antes de criar páginas reais no mesmo ciclo).
+   */
+  async removeMetaUserBasicConnection(userId: string): Promise<void> {
+    await this.prisma.socialConnection.deleteMany({
+      where: { userId, facebookPageId: META_BASIC_USER_SENTINEL_PAGE_ID },
+    });
+  }
+
+  /**
+   * Salva token de usuário quando o fluxo só tem public_profile ou falhou listagem de páginas.
+   */
+  async upsertMetaUserBasicConnection(opts: {
+    userId: string;
+    userAccessToken: string;
+    expiresAt: Date | null;
+    grantedScopes: string | null;
+    lastError?: string | null;
+  }) {
+    const enc = this.crypto.encrypt(opts.userAccessToken);
+    const now = new Date();
+    return this.prisma.socialConnection.upsert({
+      where: {
+        userId_facebookPageId: {
+          userId: opts.userId,
+          facebookPageId: META_BASIC_USER_SENTINEL_PAGE_ID,
+        },
+      },
+      create: {
+        userId: opts.userId,
+        provider: SocialProvider.META_PAGE,
+        accountLabel: 'Conta Meta (login básico)',
+        facebookPageId: META_BASIC_USER_SENTINEL_PAGE_ID,
+        facebookPageName: 'Login Meta — permissões de páginas pendentes',
+        instagramUserId: null,
+        instagramUsername: null,
+        accessTokenEnc: enc,
+        tokenExpiresAt: opts.expiresAt,
+        status: SocialConnectionStatus.META_BASIC_CONNECTED,
+        lastSyncAt: now,
+        lastError: opts.lastError ?? null,
+        grantedScopes: opts.grantedScopes ?? null,
+        isDefault: false,
+      },
+      update: {
+        accessTokenEnc: enc,
+        tokenExpiresAt: opts.expiresAt,
+        status: SocialConnectionStatus.META_BASIC_CONNECTED,
+        lastSyncAt: now,
+        lastError: opts.lastError ?? null,
+        grantedScopes: opts.grantedScopes ?? undefined,
+      },
+    });
+  }
+
   /** Resolve qual conexão usar na publicação (padrão ou explícita). */
   async resolveConnectionIdForPublishing(
     userId: string,
-    role: UserRole,
+    _role: UserRole,
     explicitConnectionId?: string,
   ): Promise<string> {
     if (explicitConnectionId?.trim()) {
-      const row = await this.assertPublishAccess(userId, role, explicitConnectionId.trim());
+      const row = await this.assertPublishAccess(userId, _role, explicitConnectionId.trim());
+      if (row.status === SocialConnectionStatus.META_BASIC_CONNECTED) {
+        throw new BadRequestException(
+          'Esta conexão é só login básico. Conceda permissões de páginas/publicação na Integrações.',
+        );
+      }
       return row.id;
     }
     const active = SocialConnectionStatus.ACTIVE;
@@ -158,21 +221,8 @@ export class SocialConnectionService {
     });
     if (ownAny) return ownAny.id;
 
-    if (role === UserRole.CORRETOR) {
-      const adminDef = await this.prisma.socialConnection.findFirst({
-        where: { status: active, isDefault: true, user: { role: UserRole.ADMIN } },
-        orderBy: { updatedAt: 'desc' },
-      });
-      if (adminDef) return adminDef.id;
-      const adminAny = await this.prisma.socialConnection.findFirst({
-        where: { status: active, user: { role: UserRole.ADMIN } },
-        orderBy: { updatedAt: 'desc' },
-      });
-      if (adminAny) return adminAny.id;
-    }
-
     throw new BadRequestException(
-      'Nenhuma página Meta conectada. Peça a um administrador para conectar em Integrações e definir uma página padrão.',
+      'Nenhuma página Meta conectada para sua conta. Abra Integrações, conecte o Facebook/Instagram e defina uma página padrão.',
     );
   }
 

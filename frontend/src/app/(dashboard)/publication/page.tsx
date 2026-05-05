@@ -97,11 +97,24 @@ export default function PublicationCenterPage() {
     if (typeof window === 'undefined') return;
     const sp = new URLSearchParams(window.location.search);
     const ok = sp.get('meta_connected');
+    const basicOk = sp.get('meta_basic_connected');
+    const pagesPending = sp.get('meta_pages_pending');
     const err = sp.get('meta_error');
     const errCode = sp.get('meta_error_code');
-    if (!ok && !err) return;
+    if (!ok && !basicOk && !err) return;
     if (ok) {
-      toast({ title: 'Conta Meta conectada', description: 'Páginas sincronizadas para publicação.', type: 'success' });
+      toast({ title: 'Meta: páginas prontas', description: 'Páginas sincronizadas para publicação.', type: 'success' });
+    }
+    if (basicOk) {
+      const extra =
+        pagesPending === '1'
+          ? ' Permissões de páginas ainda pendentes — abra Integrações e use permissões estendidas.'
+          : '';
+      toast({
+        title: 'Meta: login em modo básico',
+        description: `OAuth mínimo concluído.${extra}`,
+        type: 'success',
+      });
     }
     if (err) {
       const titles: Record<string, string> = {

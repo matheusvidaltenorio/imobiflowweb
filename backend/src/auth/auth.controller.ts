@@ -18,7 +18,13 @@ export class AuthController {
 
   @Public()
   @Post('login')
-  @Throttle({ default: { limit: 5, ttl: 60000 } }) // 5 req/min
+  @Throttle({
+    default: {
+      ttl: 60000,
+      // Dev: várias tentativas / reloads sem bloqueio; prod: endurece contra brute force
+      limit: process.env.NODE_ENV === 'production' ? 5 : 120,
+    },
+  })
   login(@Body() dto: LoginDto, @Req() req: { ip?: string }) {
     return this.auth.login(dto, req.ip);
   }

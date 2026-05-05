@@ -9,14 +9,18 @@ import {
 
 const GRAPH = 'https://graph.facebook.com';
 
-/** Default aligned with dialog/oauth e Graph — override com META_GRAPH_VERSION */
+/** States antigos sem `scopesRequested` usavam minimal com estes escopos. */
+const LEGACY_DEPRECATED_MINIMAL_SCOPES = ['public_profile', 'email', 'pages_show_list'] as const;
+
+/** Default aligned com dialog/oauth e Graph — override com META_GRAPH_VERSION */
 const DEFAULT_META_GRAPH_VERSION = 'v18.0';
 
-/** scopeMode reflete o modo usado em /meta/connect (para gravar grantedScopes no callback). */
+/** State OAuth; `scopesRequested` ausente apenas em URLs antigas ainda não expiradas. */
 export type MetaOAuthStatePayload = {
   uid: string;
   exp: number;
   scopeMode?: 'minimal' | 'extended' | null;
+  scopesRequested?: string;
 };
 
 /** Trim + aspas .env — não altere o path do redirect (deve bater com o app Meta). */
@@ -34,6 +38,22 @@ function trimQuotes(raw: string | undefined): string {
 
 function joinScopes(scopes: readonly string[]): string {
   return scopes.join(',');
+}
+
+/** Fluxo apenas public_profile — não lista páginas nem publica. */
+export function isBasicProfileOnlyScope(scopesCsv: string): boolean {
+  const parts = scopesCsv
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return parts.length === 1 && parts[0] === 'public_profile';
+}
+
+export function metaOAuthRequestsPagesList(scopesCsv: string): boolean {
+  return scopesCsv
+    .split(',')
+    .map((s) => s.trim())
+    .includes('pages_show_list');
 }
 
 /**
@@ -71,9 +91,10 @@ export class MetaOAuthService {
   /**
    * Resolve escopos finais.
    * - META_OAUTH_SCOPES= a,b,c → usa exatamente (ignora modo).
-   * - Caso contrário: query `scope=extended` ou env META_OAUTH_SCOPE_MODE=extended|full → extended;
-   *   query `scope=minimal` ou env minimal → minimal;
-   *   padrão sem query/env: minimal (login leve).
+   * - Caso contrário: ?scope=extended → escopos avançados; ?scope=minimal → apenas public_profile;
+   * - META_OAUTH_SCOPE_MODE=minimal → scope=public_profile (quando META_OAUTH_SCOPES vazio).
+   * - META_OAUTH_SCOPE_MODE=extended|full ou sem env sob query: escopos avançados só com env extended ou ?scope=extended.
+   * - Sem query e sem env (ou env=minimal): minimal = public_profile.
    */
   resolveScopesString(requestMode: MetaOAuthScopeMode | null): string {
     const explicit = trimQuotes(this.config.get<string>('META_OAUTH_SCOPES'));
@@ -97,23 +118,33 @@ export class MetaOAuthService {
     if (envMode === 'extended' || envMode === 'full') {
       return joinScopes(META_OAUTH_SCOPES_EXTENDED);
     }
-    if (envMode === 'minimal') {
-      return joinScopes(META_OAUTH_SCOPES_MINIMAL);
-    }
 
     return joinScopes(META_OAUTH_SCOPES_MINIMAL);
+  }
+
+  resolveScopesScopeModeLabel(requestMode: MetaOAuthScopeMode | null, scopesCsv: string): string {
+    const explicit = !!trimQuotes(this.config.get<string>('META_OAUTH_SCOPES'));
+    if (explicit) return 'META_OAUTH_SCOPES_override';
+    const envMode = this.config.get<string>('META_OAUTH_SCOPE_MODE')?.trim().toLowerCase() || '(unset)';
+    const q = requestMode ?? 'default-route';
+    return `query_scope=${String(q)} env_META_OAUTH_SCOPE_MODE=${envMode} effective=${metaOAuthRequestsPagesList(scopesCsv) || scopesCsv.includes('instagram') ? 'extended_scopes_csv' : 'minimal_scopes_csv'}`;
   }
 
   private signingSecret(): string {
     return this.config.get<string>('JWT_SECRET') ?? 'dev-insecure';
   }
 
-  createState(userId: string, requestMode: MetaOAuthScopeMode | null): string {
+  createState(userId: string, requestMode: MetaOAuthScopeMode | null, scopesRequested: string): string {
     const exp = Date.now() + 15 * 60 * 1000;
     let scopeMode: 'minimal' | 'extended' | null = null;
     if (requestMode === 'extended') scopeMode = 'extended';
     else if (requestMode === 'minimal') scopeMode = 'minimal';
-    const payload = JSON.stringify({ uid: userId, exp, scopeMode } satisfies MetaOAuthStatePayload);
+    const payload = JSON.stringify({
+      uid: userId,
+      exp,
+      scopeMode,
+      scopesRequested,
+    });
     const sig = createHmac('sha256', this.signingSecret()).update(payload).digest('hex');
     return Buffer.from(`${payload}::${sig}`).toString('base64url');
   }
@@ -138,20 +169,35 @@ export class MetaOAuthService {
     }
     const data = JSON.parse(payload) as MetaOAuthStatePayload;
     if (Date.now() > data.exp) throw new Error('State expirado');
-    return data;
+    const scopesLegacy =
+      data.scopeMode === 'extended'
+        ? joinScopes(META_OAUTH_SCOPES_EXTENDED)
+        : joinScopes(LEGACY_DEPRECATED_MINIMAL_SCOPES);
+
+    return {
+      ...data,
+      scopesRequested:
+        typeof data.scopesRequested === 'string' ? data.scopesRequested : scopesLegacy,
+    };
   }
 
   /**
    * https://www.facebook.com/{version}/dialog/oauth
+   * @param scopeStr escopos já resolvidos (deve coincidir com os gravados no state).
    */
-  buildAuthorizeUrl(state: string, requestMode: MetaOAuthScopeMode | null): { url: string; scopes: string } {
+  buildAuthorizeUrl(
+    state: string,
+    requestMode: MetaOAuthScopeMode | null,
+    scopeStr: string,
+  ): { url: string; scopes: string } {
     const appId = trimQuotes(this.config.get<string>('META_APP_ID'));
     const redirectUriRaw = this.getRedirectUri();
     const version = this.getGraphVersion();
     const redirectParam = encodeURIComponent(redirectUriRaw);
-    const scopeStr = this.resolveScopesString(requestMode);
+    const scopeModeLog = this.resolveScopesScopeModeLabel(requestMode, scopeStr);
     const fullUrl = `https://www.facebook.com/${version}/dialog/oauth?client_id=${appId}&redirect_uri=${redirectParam}&state=${encodeURIComponent(state)}&scope=${encodeURIComponent(scopeStr)}&response_type=code`;
 
+    this.log.log(`[Meta OAuth] scopeMode: ${scopeModeLog}`);
     this.log.log(`[Meta OAuth] client_id (META_APP_ID): ${appId}`);
     this.log.log(`[Meta OAuth] redirect_uri (raw, única fonte): ${redirectUriRaw}`);
     this.log.log(`[Meta OAuth] scopes finais: ${scopeStr}`);

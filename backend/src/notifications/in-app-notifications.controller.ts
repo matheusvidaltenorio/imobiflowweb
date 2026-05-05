@@ -18,7 +18,7 @@ function spTodayStartUtc(): Date {
 
 @Controller('notifications')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.CORRETOR, UserRole.ADMIN)
+@Roles(UserRole.CORRETOR, UserRole.ADMIN, UserRole.CLIENTE)
 export class InAppNotificationsController {
   constructor(private readonly prisma: PrismaService) {}
 

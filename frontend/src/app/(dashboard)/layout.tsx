@@ -53,8 +53,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       '/portal-hub',
       '/analytics',
       '/alerts',
+      '/chat',
     ];
-    if (brokerRoutes.some((r) => pathname?.startsWith(r)) && (user.role === 'CLIENTE' || user.role === 'GESTORA')) {
+    if (
+      brokerRoutes.some((r) => pathname?.startsWith(r)) &&
+      (user.role === 'CLIENTE' || user.role === 'GESTORA') &&
+      !pathname?.startsWith('/chat')
+    ) {
       router.replace(user.role === 'GESTORA' ? '/gestora' : '/');
     }
   }, [user, loading, router, pathname]);
@@ -82,7 +87,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <MobileNavBar onOpen={() => setMobileNavOpen(true)} />
         <div
           className={cn(
-            'min-h-0 flex-1 overflow-y-auto overflow-x-hidden [scrollbar-gutter:stable]',
+            'min-h-0 flex-1 overflow-y-auto overflow-x-hidden scrollbar-app',
             (brokerShell || gestoraShell) && 'pb-[5.5rem] lg:pb-10',
           )}
         >

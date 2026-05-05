@@ -1,72 +1,16 @@
 import { PrismaClient } from '@prisma/client';
-import * as bcrypt from 'bcrypt';
 import {
   backfillDevelopmentSlugs,
   seedDevelopmentsCatalog,
 } from './seeds/run-developments-catalog';
 import { seedDevelopmentsLocations } from './seeds/developments-locations.seed';
 import { seedDemoUniverse } from './seeds/demo-universe.seed';
+import { seedHomologUniverse } from './seeds/homolog';
+import { upsertTestUsers } from './seeds/test-users.seed';
 
 const prisma = new PrismaClient();
 
 async function main() {
-  const adminHash = await bcrypt.hash('admin123', 10);
-  const brokerHash = await bcrypt.hash('corretor123', 10);
-  const clientHash = await bcrypt.hash('cliente123', 10);
-
-  // Sempre atualiza senha no update — assim `npx prisma db seed` corrige login se o usuário já existia
-  const admin = await prisma.user.upsert({
-    where: { email: 'admin@imobflow.com' },
-    update: {
-      password: adminHash,
-      name: 'Administrador',
-      role: 'ADMIN',
-      isActive: true,
-    },
-    create: {
-      email: 'admin@imobflow.com',
-      password: adminHash,
-      name: 'Administrador',
-      role: 'ADMIN',
-    },
-  });
-
-  const broker = await prisma.user.upsert({
-    where: { email: 'corretor@imobflow.com' },
-    update: {
-      password: brokerHash,
-      name: 'João Corretor',
-      phone: '11999999999',
-      role: 'CORRETOR',
-      isActive: true,
-    },
-    create: {
-      email: 'corretor@imobflow.com',
-      password: brokerHash,
-      name: 'João Corretor',
-      phone: '11999999999',
-      role: 'CORRETOR',
-    },
-  });
-
-  const client = await prisma.user.upsert({
-    where: { email: 'cliente@imobflow.com' },
-    update: {
-      password: clientHash,
-      name: 'Maria Cliente',
-      phone: '11888888888',
-      role: 'CLIENTE',
-      isActive: true,
-    },
-    create: {
-      email: 'cliente@imobflow.com',
-      password: clientHash,
-      name: 'Maria Cliente',
-      phone: '11888888888',
-      role: 'CLIENTE',
-    },
-  });
-
   let development = await prisma.development.findFirst({ where: { name: 'Residencial Vista Verde' } });
   if (!development) {
     development = await prisma.development.create({
@@ -81,10 +25,20 @@ async function main() {
     });
   }
 
+  await upsertTestUsers(prisma);
+
+  const brokerShowcase = await prisma.user.findFirst({
+    where: { email: 'corretor1@teste.com', role: 'CORRETOR' },
+  });
+  if (!brokerShowcase) {
+    throw new Error('Seed: corretor1@teste.com não encontrado após upsertTestUsers.');
+  }
+
   await seedDevelopmentsCatalog(prisma);
   await backfillDevelopmentSlugs(prisma);
   await seedDevelopmentsLocations(prisma);
   await seedDemoUniverse(prisma);
+  await seedHomologUniverse(prisma);
 
   let block = await prisma.block.findFirst({
     where: { developmentId: development.id, name: 'Quadra A' },
@@ -129,33 +83,35 @@ async function main() {
     }
   }
 
-  await prisma.property.create({
-    data: {
-      title: 'Casa com 3 quartos - Vila Mariana',
-      description: 'Linda casa em bairro nobre, 3 quartos, 2 banheiros, área de lazer.',
-      type: 'CASA',
-      status: 'DISPONIVEL',
-      price: 850000,
-      area: 150,
-      bedrooms: 3,
-      bathrooms: 2,
-      garageSpaces: 2,
-      city: 'São Paulo',
-      neighborhood: 'Vila Mariana',
-      street: 'Rua Domingos de Morais',
-      number: '1000',
-      zipCode: '04010-100',
-      userId: broker.id,
-      developmentId: development.id,
-    },
+  const showcaseTitle = 'Casa com 3 quartos - Vila Mariana';
+  const showcase = await prisma.property.findFirst({
+    where: { userId: brokerShowcase.id, title: showcaseTitle },
   });
+  if (!showcase) {
+    await prisma.property.create({
+      data: {
+        title: showcaseTitle,
+        description: 'Linda casa em bairro nobre, 3 quartos, 2 banheiros, área de lazer.',
+        type: 'CASA',
+        status: 'DISPONIVEL',
+        price: 850000,
+        area: 150,
+        bedrooms: 3,
+        bathrooms: 2,
+        garageSpaces: 2,
+        city: 'São Paulo',
+        neighborhood: 'Vila Mariana',
+        street: 'Rua Domingos de Morais',
+        number: '1000',
+        zipCode: '04010-100',
+        userId: brokerShowcase.id,
+        developmentId: development.id,
+      },
+    });
+  }
 
   console.log('Seed executado com sucesso.');
-  console.log('Usuários de desenvolvimento (e-mails):');
-  console.log(`  • Admin:    ${admin.email}`);
-  console.log(`  • Corretor: ${broker.email}`);
-  console.log(`  • Cliente:  ${client.email}`);
-  console.log('Senhas padrão: documentadas no README — use apenas em ambiente local.');
+  console.log('Logins de teste (dev): ver comentário em prisma/seeds/test-users.seed.ts — senha única 123456.');
 }
 
 main()

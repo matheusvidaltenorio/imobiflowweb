@@ -38,6 +38,7 @@ import { MatchingModule } from './matching/matching.module';
 import { CatalogShareModule } from './catalog-share/catalog-share.module';
 import { PortalHubModule } from './portal-hub/portal-hub.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { ChatModule } from './chat/chat.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 
@@ -52,6 +53,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     CatalogShareModule,
     PortalHubModule,
     NotificationsModule,
+    ChatModule,
     ScheduleModule.forRoot(),
     ThrottlerModule.forRoot([
       { ttl: 1000, limit: 25 },

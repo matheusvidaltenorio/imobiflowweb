@@ -20,6 +20,7 @@ import {
   MapPinned,
   Megaphone,
   Menu,
+  MessageCircle,
   PanelLeftClose,
   Plug,
   Search,
@@ -72,6 +73,7 @@ const brokerGroups: NavGroup[] = [
     title: 'Relacionamento',
     items: [
       { href: '/leads', label: 'CRM / Pipeline', icon: Users },
+      { href: '/chat', label: 'Chat comercial', icon: MessageCircle },
       { href: '/clients', label: 'Clientes', icon: UserCircle },
       { href: '/crm/audio', label: 'Cadastro por áudio', icon: Mic },
       { href: '/crm/matches', label: 'Match inteligente', icon: GitMerge },
@@ -97,6 +99,7 @@ const adminGroups: NavGroup[] = [
     items: [
       { href: '/admin', label: 'Dashboard', icon: LayoutDashboard, exact: true },
       { href: '/analytics', label: 'Analytics', icon: BarChart3 },
+      { href: '/chat', label: 'Chat comercial', icon: MessageCircle },
       { href: '/admin/users', label: 'Usuários', icon: Users },
       { href: '/admin/developments', label: 'Loteamentos', icon: MapPinned },
       { href: '/admin/properties', label: 'Imóveis', icon: Building2 },
@@ -132,6 +135,7 @@ const clientGroups: NavGroup[] = [
       { href: '/search', label: 'Buscar', icon: Search },
       { href: '/favorites', label: 'Favoritos', icon: Heart },
       { href: '/interests', label: 'Interesses', icon: FileText },
+      { href: '/chat', label: 'Chat comercial', icon: MessageCircle },
       { href: '/profile', label: 'Perfil', icon: UserCircle, exact: true },
     ],
   },
@@ -230,7 +234,7 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
               Imobi<span className="text-accent-500">Flow</span>
             </Link>
           </div>
-          <nav className="min-h-0 flex-1 space-y-6 overflow-y-auto p-3">
+          <nav className="min-h-0 flex-1 space-y-6 overflow-y-auto overflow-x-hidden p-3 scrollbar-thin">
             {groups.map((group) => (
               <div key={group.title}>
                 <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">
@@ -312,7 +316,7 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
           )}
         </div>
 
-        <nav className="min-h-0 flex-1 space-y-5 overflow-y-auto p-3">
+        <nav className="min-h-0 flex-1 space-y-5 overflow-y-auto overflow-x-hidden p-3 scrollbar-sidebar-dark">
           {groups.map((group) => (
             <div key={group.title}>
               {!collapsed ? (

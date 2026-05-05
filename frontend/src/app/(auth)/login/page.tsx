@@ -21,17 +21,27 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>;
 
+const DEV_TEST_PASSWORD = '123456';
+
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
 
+  const isDev = process.env.NODE_ENV === 'development';
+
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors },
   } = useForm<FormData>({ resolver: zodResolver(schema) });
+
+  function fillQuickLogin(email: string) {
+    setValue('email', email, { shouldValidate: true });
+    setValue('password', DEV_TEST_PASSWORD, { shouldValidate: true });
+  }
 
   async function onSubmit(data: FormData) {
     setLoading(true);
@@ -87,6 +97,40 @@ export default function LoginPage() {
             <Link href="/forgot-password" className="block text-sm text-primary-600 hover:underline">
               Esqueceu a senha?
             </Link>
+            {isDev ? (
+              <div className="space-y-2 rounded-lg border border-dashed border-primary-200/80 bg-primary-50/30 p-3">
+                <p className="text-center text-xs text-gray-600">Desenvolvimento — login rápido (seed local)</p>
+                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-center">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="text-xs sm:flex-1"
+                    onClick={() => fillQuickLogin('admin@teste.com')}
+                  >
+                    Entrar como Admin
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="text-xs sm:flex-1"
+                    onClick={() => fillQuickLogin('corretor1@teste.com')}
+                  >
+                    Entrar como Corretor
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="text-xs sm:flex-1"
+                    onClick={() => fillQuickLogin('cliente1@teste.com')}
+                  >
+                    Entrar como Cliente
+                  </Button>
+                </div>
+              </div>
+            ) : null}
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? 'Entrando...' : 'Entrar'}
             </Button>

@@ -43,7 +43,7 @@
 
   .scrollbar-thin {
     scrollbar-width: thin;
-    scrollbar-color: rgb(203 213 225) transparent;
+    scrollbar-color: rgb(148 163 184 / 0.75) rgb(241 245 249 / 0.45);
   }
 
   .scrollbar-thin::-webkit-scrollbar {
@@ -51,7 +51,67 @@
     width: 6px;
   }
 
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: rgb(241 245 249 / 0.35);
+    border-radius: 9999px;
+  }
+
   .scrollbar-thin::-webkit-scrollbar-thumb {
-    @apply rounded-full bg-slate-300;
+    border-radius: 9999px;
+    background: rgb(148 163 184 / 0.65);
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: rgb(100 116 139 / 0.85);
+  }
+
+  /** Área principal do dashboard — barra fina, sem “gutter” extra */
+  .scrollbar-app {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(148 163 184 / 0.7) transparent;
+  }
+
+  .scrollbar-app::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .scrollbar-app::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-app::-webkit-scrollbar-thumb {
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    background-color: rgb(148 163 184 / 0.55);
+  }
+
+  .scrollbar-app::-webkit-scrollbar-thumb:hover {
+    background-color: rgb(100 116 139 / 0.75);
+  }
+
+  /** Sidebar escura (corretor/admin) */
+  .scrollbar-sidebar-dark {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(255 255 255 / 0.28) transparent;
+  }
+
+  .scrollbar-sidebar-dark::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-sidebar-dark::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-sidebar-dark::-webkit-scrollbar-thumb {
+    border-radius: 9999px;
+    background: rgb(255 255 255 / 0.22);
+  }
+
+  .scrollbar-sidebar-dark::-webkit-scrollbar-thumb:hover {
+    background: rgb(255 255 255 / 0.38);
   }
 }

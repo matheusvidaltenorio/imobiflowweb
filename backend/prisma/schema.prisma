@@ -232,6 +232,8 @@ enum SocialConnectionStatus {
   EXPIRED
   REVOKED
   ERROR
+  /// OAuth só com escopo mínimo (ex.: public_profile); página/Instagram não disponível até etapa estendida.
+  META_BASIC_CONNECTED
 }
 
 /// Origem do registro da central de disponibilidade diária (não altera o status cadastral do lote).
@@ -314,6 +316,19 @@ enum ExternalLeadIngestStatus {
   FAILED
 }
 
+/// Conversa comercial vinculada a lead, lote ou imóvel (chat interno).
+enum ChatConversationType {
+  LEAD
+  LOT
+  PROPERTY
+}
+
+enum ChatMessageType {
+  TEXT
+  SYSTEM
+  ACTION
+}
+
 model User {
   id            String    @id @default(cuid())
   email         String    @unique
@@ -354,6 +369,10 @@ model User {
   inAppNotifications           InAppNotification[]
   portalConnectorConfigs       PortalConnectorConfig[]
   managerDevelopmentAccess     ManagerDevelopmentAccess[]
+  conversationsAsBroker        Conversation[]             @relation("ChatConversationBroker")
+  conversationsAsClient        Conversation[]             @relation("ChatConversationClient")
+  conversationParticipants     ConversationParticipant[]
+  chatMessagesSent             ChatMessage[]
 }
 
 model Property {
@@ -392,6 +411,7 @@ model Property {
   sales           Sale[]
   portalListings  PortalListing[]
   matchSuggestions MatchSuggestion[]
+  chatConversations Conversation[]
 
   @@index([userId])
   @@index([developmentId])
@@ -565,6 +585,7 @@ model Lot {
   portalListings         PortalListing[]
   matchSuggestions       MatchSuggestion[]
   lotImageMap            LotImageMap?
+  chatConversations      Conversation[]
 
   @@index([blockId])
   @@index([status])
@@ -1050,6 +1071,7 @@ model Lead {
   matchSuggestions     MatchSuggestion[]
   catalogShares        CatalogShare[]
   externalPortalLeads  ExternalPortalLead[]
+  conversation         Conversation?
 
   @@index([propertyId])
   @@index([lotId])
@@ -1494,4 +1516,60 @@ model InAppNotification {
   @@index([userId, developmentId])
   @@index([dailyAvailabilityId])
   @@index([userId, type, dailyAvailabilityId, lotId])
+}
+
+/// Thread de chat interno (CRM / negociação).
+model Conversation {
+  id                String               @id @default(cuid())
+  type              ChatConversationType
+  leadId            String?              @unique
+  lotId             String?
+  propertyId        String?
+  brokerUserId      String               @map("broker_user_id")
+  clientUserId      String?              @map("client_user_id")
+  whatsappHandoffAt DateTime?            @map("whatsapp_handoff_at")
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  lead         Lead?     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  lot          Lot?      @relation(fields: [lotId], references: [id], onDelete: SetNull)
+  property     Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  brokerUser   User      @relation("ChatConversationBroker", fields: [brokerUserId], references: [id], onDelete: Cascade)
+  clientUser   User?     @relation("ChatConversationClient", fields: [clientUserId], references: [id], onDelete: SetNull)
+  participants ConversationParticipant[]
+  messages     ChatMessage[]
+
+  @@unique([lotId, clientUserId], map: "Conversation_lot_client_uidx")
+  @@unique([propertyId, clientUserId], map: "Conversation_property_client_uidx")
+  @@index([brokerUserId])
+  @@index([clientUserId])
+}
+
+model ConversationParticipant {
+  conversationId String    @map("conversation_id")
+  userId         String    @map("user_id")
+  lastReadAt     DateTime? @map("last_read_at")
+  joinedAt       DateTime  @default(now()) @map("joined_at")
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([conversationId, userId])
+  @@index([userId])
+}
+
+model ChatMessage {
+  id             String          @id @default(cuid())
+  conversationId String          @map("conversation_id")
+  senderId       String?         @map("sender_id")
+  content        String          @db.Text
+  type           ChatMessageType @default(TEXT)
+  metadata       Json?
+  createdAt      DateTime        @default(now()) @map("created_at")
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User?        @relation(fields: [senderId], references: [id], onDelete: SetNull)
+
+  @@index([conversationId, createdAt])
+  @@index([senderId])
 }

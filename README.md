@@ -111,11 +111,26 @@ O frontend estará em `http://localhost:3002` (configurado em `frontend/package.
 - **Não use** `output: 'export'` no [`frontend/next.config.js`](frontend/next.config.js) salvo deploy explícito como **Static Site** (site estático); no fluxo normal (Web Service / Vercel) isso quebra o pipeline esperado do Next.
 - Se o visual sumir: apague a pasta `frontend/.next`, rode `npm install` e `npm run build` (ou `npm run dev`). No navegador (DevTools → Network → CSS), confira se `/_next/static/css/...` retorna **200** e o arquivo contém classes compiladas (ex.: `.flex{`), não linhas cruas `@tailwind`.
 
-### Usuários seed
+### Usuários seed (desenvolvimento / homologação)
 
-- **Admin**: admin@imobflow.com / admin123
-- **Corretor**: corretor@imobflow.com / corretor123
-- **Cliente**: cliente@imobflow.com / cliente123
+Senha única para todos: **`123456`**. Contas criadas/atualizadas de forma idempotente em [`backend/prisma/seeds/test-users.seed.ts`](backend/prisma/seeds/test-users.seed.ts) (e-mails legados como `admin@imobflow.com` são migrados para o padrão abaixo quando possível).
+
+| Perfil | E-mails |
+|--------|---------|
+| Admin | `admin@teste.com` |
+| Corretor | `corretor1@teste.com` … `corretor5@teste.com` |
+| Cliente (User) | `cliente1@teste.com` … `cliente5@teste.com` |
+| Gestora | `gestora1@teste.com`, `gestora2@teste.com` |
+
+### Homologação (`npx prisma db seed`)
+
+Após o seed base, catálogo, localizações e **demo universe** (Cariri), o orquestrador roda **`homolog_seed_v1`** (idempotente), reutilizando os usuários `@teste.com` acima (carteiras em *Residencial Vista Verde*, CRM alinhado aos clientes de teste).
+
+**Dados extras homologação:** leads `homolog.lead.*@imobiflow.local`, propostas/contrato/venda/parcelas (corretor 1), campanhas marketing (vários status), conexão social fictícia, sugestão IA, snapshot de disponibilidade do dia em Vista Verde, imagem de imóvel (picsum).
+
+**Demo:** leads `demo.lead.*@example.test`; corretores/clientes User são os `@teste.com` do seed de teste.
+
+**Reset:** `npx prisma migrate reset` (apaga dados) ou apenas `npx prisma db seed` para reaplicar idempotente sobre a base atual.
 
 ## Deploy em produção
 

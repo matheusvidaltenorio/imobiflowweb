@@ -9,6 +9,7 @@ import {
   LayoutGrid,
   LayoutDashboard,
   Megaphone,
+  MessageCircle,
   Radio,
   Shield,
   Users,
@@ -28,6 +29,7 @@ type ActionItem = {
 const ACTIONS: ActionItem[] = [
   { href: '/dashboard', label: 'Painel', icon: LayoutDashboard },
   { href: '/leads', label: 'CRM / Leads', icon: Users },
+  { href: '/chat', label: 'Chat comercial', icon: MessageCircle },
   { href: '/visits/new', label: 'Nova visita', icon: CalendarDays },
   { href: '/visits/agenda', label: 'Agenda', icon: CalendarDays },
   { href: '/lots', label: 'Quadras e lotes', icon: LayoutGrid },
@@ -86,7 +88,7 @@ export function BrokerQuickActions() {
       >
         {open ? (
           <div
-            className="mb-1 w-[min(92vw,18rem)] max-h-[min(70vh,420px)] overflow-y-auto rounded-2xl border border-surface-muted/90 bg-white shadow-card-hover ring-1 ring-primary-950/5"
+            className="mb-1 w-[min(92vw,18rem)] max-h-[min(70vh,420px)] overflow-y-auto overflow-x-hidden rounded-2xl border border-surface-muted/90 bg-white shadow-card-hover ring-1 ring-primary-950/5 scrollbar-thin"
             role="menu"
             aria-label="Ações rápidas"
           >

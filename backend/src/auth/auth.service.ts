@@ -90,7 +90,12 @@ export class AuthService {
       throw new UnauthorizedException('Refresh token inválido ou expirado');
     }
 
-    await this.prisma.refreshToken.delete({ where: { id: stored.id } });
+    const deleted = await this.prisma.refreshToken.deleteMany({
+      where: { id: stored.id },
+    });
+    if (deleted.count === 0) {
+      throw new UnauthorizedException('Refresh token já utilizado ou inválido');
+    }
 
     return this.generateTokens(stored.user);
   }

@@ -136,7 +136,7 @@ Na sua máquina, na pasta `backend`, você também pode usar: `npm run prisma:se
 
 **Atenção:** o nome correto é **`prisma`** (com **s**). Se digitar `primsa`, o npm tentará instalar um pacote inexistente e retornará erro 404.
 
-Usuários: admin@imobflow.com / admin123 | corretor@imobflow.com / corretor123 | cliente@imobflow.com / cliente123
+Usuários: ver README — `*@teste.com` / senha `123456` após o seed.
 
 ---
 

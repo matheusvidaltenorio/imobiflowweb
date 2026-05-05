@@ -37,6 +37,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/toaster';
 import { ScheduleVisitModal } from '@/components/leads/schedule-visit-modal';
 import { LeadMessageAssistantDialog } from '@/components/commercial-assistant/lead-message-assistant-dialog';
+import { CrmChatDialog } from '@/components/chat/crm-chat-dialog';
 
 /** Pipeline comercial (alinhado ao LeadStatus do backend). */
 const COLUMNS = [
@@ -205,6 +206,7 @@ function LeadCard({
   onScheduleVisit,
   onMarkLost,
   onOpenAssistant,
+  onOpenChat,
   onCommercial,
   commercialPending,
   isDragging,
@@ -214,6 +216,7 @@ function LeadCard({
   onScheduleVisit: () => void;
   onMarkLost: () => void;
   onOpenAssistant?: () => void;
+  onOpenChat?: () => void;
   onCommercial?: (action: 'WHATSAPP' | 'PROPOSTA' | 'RESERVA' | 'VENDA') => void;
   commercialPending?: boolean;
   isDragging?: boolean;
@@ -314,6 +317,20 @@ function LeadCard({
             >
               <Sparkles className="h-3.5 w-3.5" />
               IA
+            </Button>
+          ) : null}
+          {onOpenChat && status !== 'PERDIDO' ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1 border-accent-200 bg-accent-50/80 px-2.5 text-xs font-bold text-primary-900 hover:bg-accent-100/80"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenChat();
+              }}
+            >
+              <MessageCircle className="h-3.5 w-3.5" />
+              Chat
             </Button>
           ) : null}
           {whatsappUrl && (
@@ -418,6 +435,7 @@ function DraggableLeadCard({
   onScheduleVisit,
   onMarkLost,
   onOpenAssistant,
+  onOpenChat,
   onCommercial,
   commercialPending,
 }: {
@@ -426,6 +444,7 @@ function DraggableLeadCard({
   onScheduleVisit: () => void;
   onMarkLost: () => void;
   onOpenAssistant?: () => void;
+  onOpenChat?: () => void;
   onCommercial?: (action: 'WHATSAPP' | 'PROPOSTA' | 'RESERVA' | 'VENDA') => void;
   commercialPending?: boolean;
 }) {
@@ -442,6 +461,7 @@ function DraggableLeadCard({
         onScheduleVisit={onScheduleVisit}
         onMarkLost={onMarkLost}
         onOpenAssistant={onOpenAssistant}
+        onOpenChat={onOpenChat}
         onCommercial={onCommercial}
         commercialPending={commercialPending}
         isDragging={isDragging}
@@ -456,6 +476,7 @@ function KanbanColumn({
   onScheduleVisit,
   onMarkLost,
   onOpenAssistant,
+  onOpenChat,
   onCommercial,
   commercialPendingId,
 }: {
@@ -464,6 +485,7 @@ function KanbanColumn({
   onScheduleVisit: (lead: Lead) => void;
   onMarkLost: (lead: Lead) => void;
   onOpenAssistant: (lead: Lead) => void;
+  onOpenChat: (lead: Lead) => void;
   onCommercial: (lead: Lead, action: 'WHATSAPP' | 'PROPOSTA' | 'RESERVA' | 'VENDA') => void;
   commercialPendingId: string | null;
 }) {
@@ -494,6 +516,7 @@ function KanbanColumn({
             onScheduleVisit={() => onScheduleVisit(lead)}
             onMarkLost={() => onMarkLost(lead)}
             onOpenAssistant={() => onOpenAssistant(lead)}
+            onOpenChat={() => onOpenChat(lead)}
             onCommercial={(a) => onCommercial(lead, a)}
             commercialPending={commercialPendingId === lead.id}
           />
@@ -509,6 +532,7 @@ export default function LeadsPage() {
   const { user } = useAuth();
   const [scheduleLead, setScheduleLead] = useState<Lead | null>(null);
   const [assistantLead, setAssistantLead] = useState<Lead | null>(null);
+  const [chatLead, setChatLead] = useState<Lead | null>(null);
   const [activeLead, setActiveLead] = useState<Lead | null>(null);
   const [activeStatus, setActiveStatus] = useState<LeadStatus | null>(null);
   const [sortMode, setSortMode] = useState<LeadSort>('default');
@@ -879,6 +903,7 @@ export default function LeadsPage() {
                     onScheduleVisit={setScheduleLead}
                     onMarkLost={handleMarkLost}
                     onOpenAssistant={setAssistantLead}
+                    onOpenChat={setChatLead}
                     onCommercial={handleCommercial}
                     commercialPendingId={commercialPendingId}
                   />
@@ -940,6 +965,18 @@ export default function LeadsPage() {
           }
           open={!!assistantLead}
           onOpenChange={(o) => !o && setAssistantLead(null)}
+        />
+
+        <CrmChatDialog
+          lead={
+            chatLead
+              ? { id: chatLead.id, name: chatLead.name, phone: chatLead.phone ?? undefined }
+              : null
+          }
+          open={!!chatLead}
+          onOpenChange={(o) => {
+            if (!o) setChatLead(null);
+          }}
         />
     </main>
   );

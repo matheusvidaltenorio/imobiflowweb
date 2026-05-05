@@ -66,7 +66,7 @@ export class ScheduledPublicationOrchestratorService {
   async execute(campaignId: string): Promise<void> {
     const campaign = await this.prisma.marketingCampaign.findUnique({
       where: { id: campaignId },
-      include: { targets: true },
+      include: { targets: true, user: { select: { role: true } } },
     });
     if (!campaign) {
       this.log.warn(`Campanha ${campaignId} não encontrada`);
@@ -79,7 +79,7 @@ export class ScheduledPublicationOrchestratorService {
     }
 
     const userId = campaign.userId;
-    const role = UserRole.CORRETOR;
+    const role = campaign.user.role;
     const attemptNo = campaign.retryCount + 1;
 
     const channels = this.resolveChannels(campaign);
